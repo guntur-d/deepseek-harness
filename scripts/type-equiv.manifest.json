@@ -1924,6 +1924,21 @@
       "doc": "docs/subsystems/feedback.md",
       "symbol": "MessageFeedbackDeleteResult",
       "source": "packages/feedback/message-feedback/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryEntry",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryImportance",
+      "source": "packages/memory/memory/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/memory.md",
+      "symbol": "MemoryEntryInput",
+      "source": "packages/memory/memory/src/types.ts"
     }
   ]
 }

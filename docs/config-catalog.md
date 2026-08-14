@@ -1277,6 +1277,42 @@ export interface ReconnectConfig {
 
 Source: [`packages/mcp/mcp-client/src/index.ts:98`](../packages/mcp/mcp-client/src/index.ts)
 
+<a id="deepseek-aidsh-memory"></a>
+
+## `@deepseek-ai/dsh-memory`
+
+Requires: `storageDomain`
+
+```ts config-catalog
+/** Plugin config: the store's capacity bounds. */
+export interface Config {
+  /** Maximum stored entries per workspace; the oldest are evicted past it. */
+  maxEntriesPerWorkspace: number
+  /** Maximum UTF-16 code units of one memory's text; longer saves are refused. */
+  maxTextChars: number
+}
+```
+
+Source: [`packages/memory/memory/src/index.ts:38`](../packages/memory/memory/src/index.ts)
+
+<a id="deepseek-aidsh-memory-tool"></a>
+
+## `@deepseek-ai/dsh-memory-tool`
+
+Requires: `tools` · `memory` · `systemPrompt`
+
+```ts config-catalog
+/** Plugin config: the model-facing presentation bounds. */
+export interface Config {
+  /** Maximum memories rendered into the `app:memory` prompt section. */
+  maxContextEntries: number
+  /** Maximum memories one `memory_list`/`memory_search` call returns. */
+  maxListEntries: number
+}
+```
+
+Source: [`packages/memory/memory-tool/src/index.ts:24`](../packages/memory/memory-tool/src/index.ts)
+
 <a id="deepseek-aidsh-message-feedback"></a>
 
 ## `@deepseek-ai/dsh-message-feedback`

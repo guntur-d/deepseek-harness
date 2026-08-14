@@ -61,6 +61,12 @@
       config:
         backend: json
 
+    - id: memory
+      name: '@deepseek-ai/dsh-memory'
+
+    - id: memory-tool
+      name: '@deepseek-ai/dsh-memory-tool'
+
     - id: message-feedback
       name: '@deepseek-ai/dsh-message-feedback'
       config:

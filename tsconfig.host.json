@@ -169,6 +169,8 @@
     { "path": "./packages/goal/tool-goal" },
     { "path": "./packages/goal/goal-round-driver" },
     { "path": "./packages/goal/command-goal" },
+    { "path": "./packages/memory/memory" },
+    { "path": "./packages/memory/memory-tool" },
     { "path": "./packages/feedback/command-feedback" },
     { "path": "./packages/schedule/schedule" },
     { "path": "./packages/context/time-context" },

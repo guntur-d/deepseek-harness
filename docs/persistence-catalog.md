@@ -494,6 +494,30 @@ Source: [`packages/llm/llm-retry/src/types.ts:9`](../packages/llm/llm-retry/src/
 
 Source: [`packages/llm/llm-retry/src/types.ts:11`](../packages/llm/llm-retry/src/types.ts)
 
+### `memory/*`
+
+<a id="memoryforget--log-only"></a>
+
+#### `memory/forget` — log-only
+
+```ts persistence-catalog
+/** One memory entry removed from the caller's session log. Log-only; never derived history. */
+'memory/forget': { id: MemoryId }
+```
+
+Source: [`packages/memory/memory/src/types.ts:62`](../packages/memory/memory/src/types.ts)
+
+<a id="memorywrite--log-only"></a>
+
+#### `memory/write` — log-only
+
+```ts persistence-catalog
+/** One memory entry durably recorded in the caller's session log. Log-only; never derived history. */
+'memory/write': { entry: MemoryEntry }
+```
+
+Source: [`packages/memory/memory/src/types.ts:60`](../packages/memory/memory/src/types.ts)
+
 ### `permission/*`
 
 <a id="permissionpreset--log-only"></a>
