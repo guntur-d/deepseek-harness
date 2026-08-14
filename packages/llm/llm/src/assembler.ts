@@ -36,9 +36,32 @@ interface PartialBlock {
 export class BlockAssembler {
   private partials = new Map<number, PartialBlock>()
   private order: number[] = []
+  private readonly streamSalt: string
   private _usage: TokenUsage | undefined
   private _finish: FinishReason | undefined
   private _replayState: unknown = undefined
+
+  /**
+   * @param options - assembly options.
+   * @param options.streamSalt - per-message discriminator for fallback tool-call
+   * ids, so calls a provider streams without an id stay unique across the
+   * conversation history (the agent loop passes `turn-step`).
+   */
+  constructor(options: { streamSalt?: string } = {}) {
+    this.streamSalt = options.streamSalt ?? ''
+  }
+
+  /**
+   * The id of one assembled tool-call block. A provider-supplied non-empty id
+   * is authoritative; a missing or empty id (a degenerate call some providers
+   * emit) gets a fallback unique within this message: the stream salt keeps it
+   * distinct across messages, the block index within one.
+   */
+  private toolCallId(streamed: CallId | undefined, index: number): CallId {
+    if (streamed !== undefined && streamed.length > 0) return streamed
+    const prefix = this.streamSalt === '' ? '' : `${this.streamSalt}-`
+    return CallId(`call-${prefix}${index}`)
+  }
 
   /**
    * Feed one chunk into the assembly state.
@@ -104,13 +127,20 @@ export class BlockAssembler {
   }
 
   private assemble(partial: PartialBlock, index: number): ContentBlock {
-    if (partial.block) return partial.block
+    if (partial.block) {
+      // A block-end-delivered tool-call may carry an empty provider id too;
+      // repair it with the same per-message fallback the delta path uses.
+      if (partial.block.type === 'tool-call' && partial.block.id.length === 0) {
+        return { ...partial.block, id: this.toolCallId(undefined, index) }
+      }
+      return partial.block
+    }
     switch (partial.blockType) {
       case 'text': return { type: 'text', text: partial.text }
       case 'reasoning': return { type: 'reasoning', text: partial.text }
       case 'tool-call': return {
         type: 'tool-call',
-        id: partial.toolCallId ?? CallId(`call-${index}`),
+        id: this.toolCallId(partial.toolCallId, index),
         name: partial.toolCallName ?? '',
         arguments: partial.toolCallArguments,
       }

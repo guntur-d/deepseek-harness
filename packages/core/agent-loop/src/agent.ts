@@ -340,7 +340,7 @@ export class ReactLoopAgent implements Agent {
       const { request, preparedCall } = await this.buildRequest(
         turn, step, assembly.tools, system, this.session.deriveMessages(), signal,
       )
-      const assembler = new BlockAssembler()
+      const assembler = new BlockAssembler({ streamSalt: `${turn}-${step}` })
       const chunkSeqs: number[] = []
       const stream = preparedCall?.stream(request) ?? this.loopCtx.llm.stream(request)
       signal.throwIfAborted()

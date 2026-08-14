@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-14-tool-call-id-collision.md
+2026-08-14-tool-call-id-collision.md: e5bb15ed23f821d3452c6397e3974225066d42de
+2026-08-14-tool-call-id-collision.zh.md: 3a6f23708f2200e3c6a68e89a482476c5a385514

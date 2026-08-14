@@ -110,6 +110,41 @@ describe('BlockAssembler', () => {
     ])
   })
 
+  it('repairs an empty provider tool-call id with a salted fallback', () => {
+    // The DeepSeek/pi-ai adapters map a missing streamed id to CallId(''), so
+    // an empty id is the live shape of a degenerate call. The assembler must
+    // repair it instead of letting '' reach the wire, where two tool-result
+    // messages would collide on tool_call_id.
+    const assembler = new BlockAssembler({ streamSalt: '3-1' })
+    assembler.push({ type: 'tool-call-delta', index: 0, id: CallId(''), argumentsDelta: '{}' })
+    expect(assembler.blocks()).toEqual([
+      { type: 'tool-call', id: CallId('call-3-1-0'), name: '', arguments: '{}' },
+    ])
+  })
+
+  it('keeps fallback ids unique across messages and positions', () => {
+    // The stream salt discriminates messages; the block index discriminates
+    // calls within one message, so the same first call position in two
+    // messages never collides.
+    const first = new BlockAssembler({ streamSalt: '3-1' })
+    first.push({ type: 'tool-call-delta', index: 0, id: CallId(''), argumentsDelta: '{}' })
+    const second = new BlockAssembler({ streamSalt: '3-2' })
+    second.push({ type: 'tool-call-delta', index: 0, id: CallId(''), argumentsDelta: '{}' })
+    expect(first.blocks()[0]).toMatchObject({ id: CallId('call-3-1-0') })
+    expect(second.blocks()[0]).toMatchObject({ id: CallId('call-3-2-0') })
+  })
+
+  it('repairs an empty tool-call id on a block-end-delivered block', () => {
+    const assembler = new BlockAssembler({ streamSalt: '4-0' })
+    assembler.push({
+      type: 'block-end', index: 0,
+      block: { type: 'tool-call', id: CallId(''), name: 'echo', arguments: '{}' },
+    })
+    expect(assembler.blocks()).toEqual([
+      { type: 'tool-call', id: CallId('call-4-0-0'), name: 'echo', arguments: '{}' },
+    ])
+  })
+
   it('exposes usage via the getter when a usage chunk was received', () => {
     const assembler = new BlockAssembler()
     assembler.push({ type: 'text-delta', index: 0, text: 'msg' })
