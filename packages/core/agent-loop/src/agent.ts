@@ -21,6 +21,7 @@ import {
   BlockAssembler,
   LlmError,
   createAssistantMessage,
+  createUserMessage,
   deepFreeze,
   errorChain,
   markAgentLoopRequest,
@@ -76,6 +77,13 @@ export class ReactLoopAgent implements Agent {
   /** Whether this loop instance has appended its initial/resume request anchor. */
   private requestHeaderLogged = false
   private readonly runtimeContext: RuntimeContextProjection
+  /**
+   * Consecutive agent steps whose tool calls all errored. Reset by any step
+   * that produces text or commits a successful tool result; past
+   * `maxConsecutiveToolFailures` the loop ends the turn with a notice instead
+   * of letting a failing model drive the step loop without bound.
+   */
+  private consecutiveToolFailures = 0
 
   constructor(
     private loopCtx: Context,
@@ -388,14 +396,37 @@ export class ReactLoopAgent implements Agent {
         },
         { surfaceOp: 'append', sourceEventSeqs: chunkSeqs },
       )
-      if (finish.kind === 'max-tokens') return { kind: 'max-tokens' }
+      if (finish.kind === 'max-tokens') {
+        this.consecutiveToolFailures = 0
+        return { kind: 'max-tokens' }
+      }
 
       const toolCalls = message.content.filter(block => block.type === 'tool-call')
-      if (toolCalls.length === 0) return { kind: 'completed' }
-      const { concluded } = await executeToolCalls(
+      if (toolCalls.length === 0) {
+        this.consecutiveToolFailures = 0
+        return { kind: 'completed' }
+      }
+      const { concluded, errored } = await executeToolCalls(
         this.loopCtx, turn, step, toolCalls, signal,
         context => this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context]),
       )
+      this.consecutiveToolFailures = errored === toolCalls.length
+        ? this.consecutiveToolFailures + 1
+        : 0
+      if (this.consecutiveToolFailures >= this.loopCtx.agentLoop.config.maxConsecutiveToolFailures) {
+        // A model emitting only failing calls would otherwise drive the step
+        // loop without bound; end the turn with a logged, model-visible notice.
+        this.session.append('user/message', createUserMessage({
+          source: { kind: 'plugin', plugin: 'agent-loop' },
+          content: [{
+            type: 'text',
+            text: `The turn ended because ${String(this.consecutiveToolFailures)} consecutive tool steps all errored. `
+              + 'Reply in text: tell the user which tool attempts failed and ask how to proceed.',
+          }],
+        }), { surfaceOp: 'append' })
+        this.consecutiveToolFailures = 0
+        return { kind: 'completed' }
+      }
       return concluded ? { kind: 'completed' } : null
     }
   }

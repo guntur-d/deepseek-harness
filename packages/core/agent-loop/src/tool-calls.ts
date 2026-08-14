@@ -35,6 +35,8 @@ interface GroupOutcome {
   aborted: boolean
   /** Whether any committed result carried {@link ToolExecutionResult.concludesTurn}. */
   concluded: boolean
+  /** Committed results that were {@link ToolExecutionResult.isError}. */
+  errored: number
 }
 
 /**
@@ -63,7 +65,7 @@ export async function executeToolCalls(
   toolCalls: ToolCallBlock[],
   signal: AbortSignal,
   acceptContext: (context: UserMessage) => void,
-): Promise<{ concluded: boolean }> {
+): Promise<{ concluded: boolean; errored: number }> {
   const agent = ctx.agents.requireInitiator()
   const { session } = agent
 
@@ -81,6 +83,7 @@ export async function executeToolCalls(
 
   let next = 0
   let concluded = false
+  let errored = 0
   while (next < planned.length) {
     // Commit before classifying again so registry changes affect unstarted calls.
     // oxlint-disable-next-line typescript/no-non-null-assertion -- bounded by the loop condition
@@ -92,12 +95,13 @@ export async function executeToolCalls(
     )
     next += outcome.consumed
     concluded ||= outcome.concluded
+    errored += outcome.errored
     if (outcome.aborted) {
       for (const call of planned.slice(next)) appendSkippedToolCall(session, turn, step, call.block)
-      return { concluded }
+      return { concluded, errored }
     }
   }
-  return { concluded }
+  return { concluded, errored }
 }
 
 /** Parse model arguments, preserving invalid JSON as text and mapping empty input to `{}`. */
@@ -135,6 +139,7 @@ async function runGroup(
   let nextToStart = 0
   let committed = 0
   let started = 0
+  let errored = 0
   let aborted: boolean = signal.aborted
   let concluded = false
   let schedulerFailure: { error: unknown } | undefined
@@ -153,6 +158,7 @@ async function runGroup(
         : ctx.tools[TOOL_RUNTIME_SCHEDULER].finish(slot.exec, slot.result)
       // oxlint-disable-next-line typescript/no-non-null-assertion -- bounded index
       appendToolResult(session, turn, step, call!.block, result, callSeqs[committed]!)
+      if (result.isError) errored++
       for (const context of result.additionalContexts ?? []) acceptContext(context)
       concluded ||= result.concludesTurn === true
       committed++
@@ -238,11 +244,11 @@ async function runGroup(
     // Started calls and accepted context settle first; every remaining model
     // call then receives an ordered synthetic result before the turn aborts.
     for (const call of group.slice(started)) appendSkippedToolCall(session, turn, step, call.block)
-    return { consumed: group.length, aborted: true, concluded }
+    return { consumed: group.length, aborted: true, concluded, errored }
   }
   /* v8 ignore next -- unreachable: a non-aborted group commits every started call */
   if (committed !== started) throw new Error('tool-call scheduler: uncommitted settled calls')
-  return { consumed: started, aborted: false, concluded }
+  return { consumed: started, aborted: false, concluded, errored }
 }
 
 /** Append the durable call/result pair for a model call skipped after cancellation. */
