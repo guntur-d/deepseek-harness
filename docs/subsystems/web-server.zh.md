@@ -31,14 +31,20 @@ interface WebRoute {
 ```ts type-equiv
 /** Gateway config: the listen address. */
 interface Config {
-  /** Listen host; the two supported values are loopback and all-interfaces. */
-  host: '127.0.0.1' | '0.0.0.0'
+  /**
+   * Listen host: loopback, all-interfaces, or one specific bind address
+   * (IP literal or hostname). A specific address binds only that interface;
+   * `0.0.0.0` binds every IPv4 interface and is the deliberate network-exposure
+   * posture the CLI refuses. The browser-trust fence, not this schema, decides
+   * which authorities may drive the API.
+   */
+  host: string
   /** Listen port; zero requests an OS-assigned port. */
   port: number
 }
 ```
 
-`host` 只接受 `127.0.0.1`（默认姿态）和 `0.0.0.0`（刻意的网络暴露）；没有 TLS、认证或 origin 策略，因此绑定到非回环地址会把服务器暴露给该网络。dist 位置是认领席位的前端插件的组装事实。
+`host` 接受任意非空绑定地址：`127.0.0.1`（默认姿态）、具体的 IP 字面量或主机名（只绑定该网卡），或通配字面量 `0.0.0.0`（所有 IPv4 网卡）与 `::`（所有 IPv6 网卡），即 CLI 拒绝的刻意向网络开放姿态。没有 TLS、认证或 origin 策略，因此绑定到非回环地址会把服务器暴露给该网络；由哪个 authority 可以驱动 API 由浏览器信任围栏决定，而非本 schema。dist 位置是认领席位的前端插件的组装事实。
 
 ## 服务
 
@@ -104,5 +110,5 @@ tapIndex(transform: (html: string) => string): () => void
 applyIndexTaps(html: string): string
 ```
 
-Source: [`packages/host/webserver/src/index.ts:59`](../../packages/host/webserver/src/index.ts)
+Source: [`packages/host/webserver/src/index.ts:65`](../../packages/host/webserver/src/index.ts)
 <!-- END GENERATED cordis-surface -->

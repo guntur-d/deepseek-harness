@@ -31,14 +31,20 @@ Match order is fixed: exact table first, then longest matching prefix, then the 
 ```ts type-equiv
 /** Gateway config: the listen address. */
 interface Config {
-  /** Listen host; the two supported values are loopback and all-interfaces. */
-  host: '127.0.0.1' | '0.0.0.0'
+  /**
+   * Listen host: loopback, all-interfaces, or one specific bind address
+   * (IP literal or hostname). A specific address binds only that interface;
+   * `0.0.0.0` binds every IPv4 interface and is the deliberate network-exposure
+   * posture the CLI refuses. The browser-trust fence, not this schema, decides
+   * which authorities may drive the API.
+   */
+  host: string
   /** Listen port; zero requests an OS-assigned port. */
   port: number
 }
 ```
 
-`host` accepts only `127.0.0.1` (default posture) and `0.0.0.0` (deliberate network exposure); there is no TLS, auth, or origin policy, so a non-loopback bind exposes the server to that network. The dist location is an assembly fact of the frontend plugin that claims the seat.
+`host` accepts any non-empty bind address: `127.0.0.1` (default posture), a specific IP literal or hostname (binds only that interface), or the wildcard literals `0.0.0.0` (every IPv4 interface) and `::` (every IPv6 interface), the deliberate network-exposure posture the CLI refuses. There is no TLS, auth, or origin policy, so a non-loopback bind exposes the server to that network; the browser-trust fence, not this schema, decides which authorities may drive the API. The dist location is an assembly fact of the frontend plugin that claims the seat.
 
 ## The service
 
@@ -104,5 +110,5 @@ tapIndex(transform: (html: string) => string): () => void
 applyIndexTaps(html: string): string
 ```
 
-Source: [`packages/host/webserver/src/index.ts:59`](../../packages/host/webserver/src/index.ts)
+Source: [`packages/host/webserver/src/index.ts:65`](../../packages/host/webserver/src/index.ts)
 <!-- END GENERATED cordis-surface -->

@@ -27,6 +27,8 @@ export interface WebStartupValues {
   port?: number
   /** Explicit `--trusted-host` authorities, in argument order. */
   trustedHosts: string[]
+  /** `--allow-privileged-remote`: the trusted authorities also serve the privileged plane. */
+  allowPrivilegedRemote: boolean
 }
 
 /** The web flag family, as commander parsed it. */
@@ -34,6 +36,7 @@ interface WebOptions {
   host?: string
   port?: string
   trustedHost?: string[]
+  allowPrivilegedRemote?: boolean
 }
 
 /**
@@ -48,6 +51,7 @@ function webCommand(): Command {
     .option('--host <host>', 'bind host')
     .option('--port <port>', 'listen port; pass 0 to let the OS pick a free one')
     .option('--trusted-host <authority...>', 'extra authority the /api browser-trust fence accepts (host or host:port; repeatable)')
+    .option('--allow-privileged-remote', 'serve settings, credentials, and agent presets to the --trusted-host authorities too; requires --trusted-host')
     .addHelpText('after', `
 Examples:
   dsh --profile web                          serve on the composed host and port
@@ -55,27 +59,34 @@ Examples:
 `)
 }
 
+/** The wildcard bind literals the CLI refuses: every interface of the given family. */
+const WILDCARD_BIND_HOSTS = new Set(['0.0.0.0', '::'])
+
 /**
  * Parse and provide the Web invocation as an ordinary Cordis service. The
- * command's action publishes the flags this invocation named; `--host 0.0.0.0`
- * or a non-numeric `--port` is a usage error, so on rejection (and on `--help`)
- * nothing is provided.
+ * command's action publishes the flags this invocation named; a wildcard
+ * `--host` or a non-numeric `--port` is a usage error, so on rejection (and
+ * on `--help`) nothing is provided.
  * @param ctx - plugin context carrying the command line.
  */
 export function apply(ctx: Context): void {
   const program = webCommand()
   program.action(() => {
     const options = program.opts<WebOptions>()
-    if (options.host === '0.0.0.0') {
-      program.error('error: --host 0.0.0.0 is intentionally not supported yet for safety: it would expose remote code execution to the network; use 127.0.0.1 instead')
+    if (options.host !== undefined && WILDCARD_BIND_HOSTS.has(options.host)) {
+      program.error(`error: --host ${options.host} is intentionally not supported yet for safety: it would expose remote code execution to the network; use 127.0.0.1 instead`)
     }
     if (options.port !== undefined && !/^\d+$/.test(options.port)) {
       program.error(`error: --port must be a number, got ${JSON.stringify(options.port)}`)
+    }
+    if (options.allowPrivilegedRemote && (options.trustedHost === undefined || options.trustedHost.length === 0)) {
+      program.error('error: --allow-privileged-remote requires --trusted-host: it opens the settings, credentials, and agent-preset plane to exactly those authorities')
     }
     ctx.provide(WEB_STARTUP_SERVICE, {
       ...options.host !== undefined && { host: options.host },
       ...options.port !== undefined && { port: Number(options.port) },
       trustedHosts: options.trustedHost ?? [],
+      allowPrivilegedRemote: options.allowPrivilegedRemote ?? false,
     } satisfies WebStartupValues)
   })
   parseCmdline(ctx, program)

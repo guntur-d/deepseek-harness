@@ -47,12 +47,20 @@ export interface Config {
   surfaceContext: boolean
   /** Explicit `--trusted-host` authorities from this invocation. */
   trustedHosts: string[]
+  /**
+   * `--allow-privileged-remote`: serve the privileged method plane (settings,
+   * credentials, agent presets, native dialogs) to the trusted authorities
+   * too. Without it the plane stays loopback-only, however far the /api fence
+   * extends.
+   */
+  allowPrivilegedRemote: boolean
 }
 
 export const Config: z<Config> = z.object({
   printUrl: z.boolean().default(true),
   surfaceContext: z.boolean().default(true),
   trustedHosts: z.array(String).default([]),
+  allowPrivilegedRemote: z.boolean().default(false),
 })
 
 /** Bind-dependent Web values shared by the trust fence and URL display. */
@@ -61,6 +69,11 @@ export interface WebRuntimeValues {
   lanAddresses: string[]
   /** LAN literals followed by explicit invocation authorities. */
   trustedHosts: string[]
+  /**
+   * Authorities the privileged method plane (settings, credentials, agent
+   * presets, native dialogs) also serves; empty keeps the plane loopback-only.
+   */
+  privilegedHosts: string[]
 }
 
 /** Environment variable naming the canonical local URL of this Web GUI. */
@@ -80,15 +93,23 @@ const ALL_INTERFACES_HOST = '0.0.0.0'
  * an OS-assigned port is unknowable before bind.
  * @param bindHost - the active webserver bind host.
  * @param extra - explicit `--trusted-host` values, in argument order.
+ * @param allowPrivilegedRemote - whether the trusted authorities also serve
+ * the privileged method plane (settings, credentials, agent presets, native
+ * dialogs); false keeps that plane loopback-only.
  * @returns the LAN display addresses and invocation-derived fence authorities.
  */
-export function resolveLanTrust(bindHost: string, extra: readonly string[]): WebRuntimeValues {
+export function resolveLanTrust(
+  bindHost: string,
+  extra: readonly string[],
+  allowPrivilegedRemote = false,
+): WebRuntimeValues {
   const lanAddresses = bindHost === ALL_INTERFACES_HOST
     ? Object.values(networkInterfaces()).flat()
       .filter((iface): iface is NonNullable<typeof iface> => iface !== undefined && iface.family === 'IPv4' && !iface.internal)
       .map(iface => iface.address)
     : []
-  return { lanAddresses, trustedHosts: [...lanAddresses, ...extra] }
+  const trustedHosts = [...lanAddresses, ...extra]
+  return { lanAddresses, trustedHosts, privilegedHosts: allowPrivilegedRemote ? trustedHosts : [] }
 }
 
 /** Model-visible orientation and acceptance boundary for sessions created through `dsh web`. */
@@ -105,11 +126,20 @@ function webSurfacePrompt(webUrl: string): string {
     + 'Do not start a replacement server unless the user asks; if one is needed, use a managed background job and verify its exact URL.'
 }
 
-/** Resolve the canonical loopback URL from the active Web server. */
+/**
+ * Resolve the canonical URL of the active Web server. A specific bind host is
+ * the only reachable address for that server (loopback is not bound), so the
+ * URL names it; the all-interfaces bind falls back to loopback for a local
+ * client.
+ */
 function localWebUrl(ctx: Context): string {
-  const port = ctx.get('webServer')?.port
-  if (port === undefined) throw new Error('web-app: webServer service missing while resolving Web runtime')
-  return `http://${LOOPBACK_HOST}:${String(port)}`
+  const server = ctx.get('webServer')
+  const port = server?.port
+  if (server === undefined || port === undefined) {
+    throw new Error('web-app: webServer service missing while resolving Web runtime')
+  }
+  const host = server.host === ALL_INTERFACES_HOST ? LOOPBACK_HOST : server.host
+  return `http://${host}:${String(port)}`
 }
 
 /** Dist location is workspace knowledge of this bundle: resolved through the frontend package exports, not configured. */
@@ -133,7 +163,7 @@ export const internals: { resolveDistIndex: () => string } = { resolveDistIndex 
  * @param config - validated {@link Config}.
  */
 export function apply(ctx: Context, config: Config): void {
-  const runtime = resolveLanTrust(ctx.webServer.host, config.trustedHosts)
+  const runtime = resolveLanTrust(ctx.webServer.host, config.trustedHosts, config.allowPrivilegedRemote)
   // Release dependent rows only after bind-dependent trust has been sampled once.
   ctx.provide(WEB_RUNTIME_SERVICE, runtime)
   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
@@ -162,10 +192,16 @@ export function apply(ctx: Context, config: Config): void {
     // sibling rows (the /api route owner) are still mounting. Await Loader
     // settlement first; a hand-built tree without a Loader prints at once.
     const printUrl = (): void => {
-      // Reuse the exact LAN snapshot provided to the /api trust fence.
+      const server = ctx.webServer
+      const port = server.port
       const lanCandidate = runtime.lanAddresses[0]
-      const port = ctx.webServer.port
-      console.log(`dsh web: ${localWebUrl(ctx)}${lanCandidate === undefined ? '' : ` (LAN: http://${lanCandidate}:${String(port)})`}`)
+      const lanHint = server.host === ALL_INTERFACES_HOST && lanCandidate !== undefined
+        ? ` (LAN: http://${lanCandidate}:${String(port)})`
+        : ''
+      const loopbackOnlyHint = server.host === LOOPBACK_HOST
+        ? ' (loopback only — to serve the network, restart with: dsh web --host <LAN IP> --trusted-host <LAN IP>)'
+        : ''
+      console.log(`dsh web: ${localWebUrl(ctx)}${lanHint}${loopbackOnlyHint}`)
     }
     // This row's own activation can precede a sibling failure. The app owns
     // readiness by waiting for its Loader tree, or prints at once in a
