@@ -1247,6 +1247,18 @@ describe('the run_code dispatch bridge', () => {
     expect((result.content[0] as { text: string }).text).toContain('invalid description')
   })
 
+  it('runs when the model omits the optional description, falling back to a generic card title', async () => {
+    const { ctx } = await setup({ mode: 'code' })
+    const tool = ctx.tools.get(RUN_CODE_NAME)!
+    // The observed failure mode: DeepSeek models occasionally omit the UI-label
+    // field; the call must still run with a fallback title, not fail the turn.
+    const card = tool.presentCall?.({ code: 'return 1' })
+    expect(card).toEqual({ card: 'generic', title: 'Run code', kind: 'execute', rawInput: 'return 1' })
+    const result = await runCode(ctx, 'return 1')
+    expect(result.isError).toBe(false)
+    expect((result.content[0] as { text: string }).text).not.toContain('invalid')
+  })
+
   it.each([
     ['logs only', { logs: ['printed'] }, 'printed'],
     ['result only', { logs: [], value: 'returned' }, 'returned'],
