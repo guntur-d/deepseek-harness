@@ -79,9 +79,9 @@ export const filesUploadRequestSchema = z.object({
   data: base64DataSchema,
 }) satisfies z.ZodType<Wire<RequestPayload<'files.upload'>>>
 
-/** files.write / files.upload value: the shared write receipt. */
+/** files.write / files.upload value: the shared write receipt (identical wire types). */
 export const filesWriteValueSchema = z.object({
   operation: z.union([z.literal('create'), z.literal('update')]),
   version: z.string(),
   bytes: z.number().int().nonnegative(),
-}) satisfies z.ZodType<Wire<ResponseValue<'files.write'>> & Wire<ResponseValue<'files.upload'>>>
+}) satisfies z.ZodType<Wire<ResponseValue<'files.write'>>>

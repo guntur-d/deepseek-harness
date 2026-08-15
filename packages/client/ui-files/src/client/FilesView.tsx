@@ -150,13 +150,13 @@ export function FilesView({
     <div className={css.panel} role="region" aria-label={t('panel.aria')}>
       <div className={css.toolbar}>
         <div className={css.crumbs}>
-          <button type="button" className={css.crumb} onClick={() => navigate('')}>
+          <button type="button" className={css.crumb} onClick={() => { navigate('') }}>
             {t('panel.root')}
           </button>
           {paths.map((path, index) => (
             <span key={path} className={css.crumbGroup}>
               <span className={css.separator}>/</span>
-              <button type="button" className={css.crumb} onClick={() => navigate(path)}>
+              <button type="button" className={css.crumb} onClick={() => { navigate(path) }}>
                 {crumbs[index] as string}
               </button>
             </span>
@@ -186,7 +186,7 @@ export function FilesView({
         <div className={css.editor}>
           <div className={css.editorHead}>
             <span className={css.editorTitle}>{open.path}</span>
-            <button type="button" className={css.button} onClick={() => download(open.path)}>
+            <button type="button" className={css.button} onClick={() => { download(open.path) }}>
               {t('panel.download')}
             </button>
             <button

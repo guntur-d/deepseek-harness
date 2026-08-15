@@ -64,7 +64,10 @@ export function apply(ctx: ClientContext): void {
         download: (path) => {
           // Same-origin Host download URL, with the connection carrier's
           // null-origin fallback (fixture mode serves 404 from the surface).
-          const origin = globalThis.location?.origin
+          // The facet cast keeps the runtime guard for location-less contexts
+          // (jsdom fixture pages) while satisfying the typed-DOM linter.
+          const locationFacet = globalThis as { location?: { origin?: string } }
+          const origin = locationFacet.location?.origin
           const base = origin !== undefined && origin !== 'null' ? origin : 'http://dsh.internal'
           const url = new URL('/api/files.download', base)
           url.searchParams.set('sessionId', String(sessionId))

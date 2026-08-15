@@ -67,7 +67,7 @@ describe('FilesView listing', () => {
     render(<FilesView {...f} t={t} />)
     await screen.findByText('src/')
     await act(async () => { fireEvent.click(screen.getByText('src/')) })
-    await waitFor(() => expect(f.list).toHaveBeenCalledWith('src', expect.any(AbortSignal)))
+    await waitFor(() => { expect(f.list).toHaveBeenCalledWith('src', expect.any(AbortSignal)) })
   })
 
   it('navigates two levels deep and shows breadcrumbs', async () => {
@@ -81,7 +81,7 @@ describe('FilesView listing', () => {
     await act(async () => { fireEvent.click(screen.getByText('src/')) })
     await screen.findByText('lib/')
     await act(async () => { fireEvent.click(screen.getByText('lib/')) })
-    await waitFor(() => expect(f.list).toHaveBeenCalledWith('src/lib', expect.any(AbortSignal)))
+    await waitFor(() => { expect(f.list).toHaveBeenCalledWith('src/lib', expect.any(AbortSignal)) })
     // The root crumb and the two segment crumbs are all present.
     expect(screen.getByText(zh['panel.root'])).toBeTruthy()
     expect(screen.getByText('src')).toBeTruthy()
@@ -99,12 +99,12 @@ describe('FilesView listing', () => {
     await act(async () => { fireEvent.click(screen.getByText('src/')) })
     await screen.findByText('lib/')
     await act(async () => { fireEvent.click(screen.getByText('lib/')) })
-    await waitFor(() => expect(f.list).toHaveBeenCalledWith('src/lib', expect.any(AbortSignal)))
+    await waitFor(() => { expect(f.list).toHaveBeenCalledWith('src/lib', expect.any(AbortSignal)) })
     // The 'src' crumb jumps back to src; the root crumb jumps to the root.
     await act(async () => { fireEvent.click(screen.getByText('src')) })
-    await waitFor(() => expect(f.list).toHaveBeenCalledWith('src', expect.any(AbortSignal)))
+    await waitFor(() => { expect(f.list).toHaveBeenCalledWith('src', expect.any(AbortSignal)) })
     await act(async () => { fireEvent.click(screen.getByText(zh['panel.root'])) })
-    await waitFor(() => expect(f.list).toHaveBeenCalledWith('', expect.any(AbortSignal)))
+    await waitFor(() => { expect(f.list).toHaveBeenCalledWith('', expect.any(AbortSignal)) })
   })
 
   it('renders the message of a string rejection', async () => {
@@ -143,7 +143,7 @@ describe('FilesView listing', () => {
   it('ignores an aborted list resolution (no error notice)', async () => {
     const f = face({
       list: vi.fn<FilesViewInjected['list']>((_path, signal) => new Promise((_resolve, reject) => {
-        signal.addEventListener('abort', () => reject(new Error('aborted')))
+        signal.addEventListener('abort', () => { reject(new Error('aborted')) })
       })),
     })
     const { unmount } = render(<FilesView {...f} t={t} />)
@@ -183,7 +183,7 @@ describe('FilesView editor', () => {
     await screen.findByText(zh['panel.truncated'])
     const textarea = await screen.findByRole('textbox') as HTMLTextAreaElement
     expect(textarea.readOnly).toBe(true)
-    expect((screen.getByText(zh['panel.save']) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(zh['panel.save'])).toHaveProperty('disabled', true)
   })
 
   it('shows the save failure as a notice', async () => {
@@ -304,7 +304,7 @@ describe('FilesView transfer', () => {
     render(<FilesView {...f} t={t} />)
     await screen.findByText(zh['panel.empty'])
     await act(async () => { fireEvent.click(screen.getByText(zh['panel.refresh'])) })
-    await waitFor(() => expect(f.list).toHaveBeenCalledTimes(2))
+    await waitFor(() => { expect(f.list).toHaveBeenCalledTimes(2) })
   })
 
   it('the upload button opens the hidden file input', async () => {

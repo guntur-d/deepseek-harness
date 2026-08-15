@@ -16,7 +16,7 @@ import { basename } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { FsError } from '@deepseek-ai/dsh-fs'
 import type { FileSystem, FsTarget } from '@deepseek-ai/dsh-fs'
-import type { Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { FileContent, FilesEntry, FilesListing, FileWriteReceipt } from './api/files.ts'
 
@@ -60,11 +60,11 @@ export interface WorkspaceRoot {
  * @returns the canonical root target and its absolute path.
  */
 export async function workspaceRootOf(ctx: Context, sessionId: SessionId): Promise<WorkspaceRoot> {
-  const fs = ctx.get('fs') as FileSystem | undefined
+  const fs = ctx.get('fs')
   if (fs === undefined) {
     throw new WorkspaceFilesError('file-unreadable', '', 'the filesystem service is not mounted')
   }
-  const session = ctx.sessions.get(sessionId) as Session | undefined
+  const session = ctx.sessions.get(sessionId)
   if (session === undefined) {
     throw new WorkspaceFilesError('file-not-found', '', `session "${sessionId}" is not attached`)
   }
@@ -102,7 +102,11 @@ export async function resolveContained(
   return target
 }
 
-/** The workspace-write policy every files-domain write carries (rooted at the workspace). */
+/**
+ * The workspace-write policy every files-domain write carries (rooted at the workspace).
+ * @param root - the resolved canonical workspace root.
+ * @returns the per-call sandbox policy fencing the write to the workspace.
+ */
 export function workspaceWritePolicy(root: WorkspaceRoot): SandboxExecutionPolicy {
   return { mode: 'workspace-write', workspaceRoot: root.rootPath }
 }
