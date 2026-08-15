@@ -130,11 +130,26 @@ describe('session export compression config', () => {
     expect(ApiProxyService.Config({})).toEqual({
       sessionExportCompressionLevel: 6,
       coldBlankProbeMaxBytes: 1024,
+      filesMaxTextBytes: 1048576,
+      filesMaxTransferBytes: 67108864,
+      filesMaxListingEntries: 2000,
     })
     expect(ApiProxyService.Config({ sessionExportCompressionLevel: 0 }))
-      .toEqual({ sessionExportCompressionLevel: 0, coldBlankProbeMaxBytes: 1024 })
+      .toEqual({
+        sessionExportCompressionLevel: 0,
+        coldBlankProbeMaxBytes: 1024,
+        filesMaxTextBytes: 1048576,
+        filesMaxTransferBytes: 67108864,
+        filesMaxListingEntries: 2000,
+      })
     expect(ApiProxyService.Config({ sessionExportCompressionLevel: 9 }))
-      .toEqual({ sessionExportCompressionLevel: 9, coldBlankProbeMaxBytes: 1024 })
+      .toEqual({
+        sessionExportCompressionLevel: 9,
+        coldBlankProbeMaxBytes: 1024,
+        filesMaxTextBytes: 1048576,
+        filesMaxTransferBytes: 67108864,
+        filesMaxListingEntries: 2000,
+      })
     for (const value of [-1, 10, 1.5]) {
       expect(() => ApiProxyService.Config({ sessionExportCompressionLevel: value } as never)).toThrow()
     }
@@ -144,9 +159,21 @@ describe('session export compression config', () => {
 describe('cold blank probe config', () => {
   it('accepts a per-Session byte bound including zero and rejects invalid bounds', () => {
     expect(ApiProxyService.Config({ coldBlankProbeMaxBytes: 0 }))
-      .toEqual({ sessionExportCompressionLevel: 6, coldBlankProbeMaxBytes: 0 })
+      .toEqual({
+        sessionExportCompressionLevel: 6,
+        coldBlankProbeMaxBytes: 0,
+        filesMaxTextBytes: 1048576,
+        filesMaxTransferBytes: 67108864,
+        filesMaxListingEntries: 2000,
+      })
     expect(ApiProxyService.Config({ coldBlankProbeMaxBytes: 2048 }))
-      .toEqual({ sessionExportCompressionLevel: 6, coldBlankProbeMaxBytes: 2048 })
+      .toEqual({
+        sessionExportCompressionLevel: 6,
+        coldBlankProbeMaxBytes: 2048,
+        filesMaxTextBytes: 1048576,
+        filesMaxTransferBytes: 67108864,
+        filesMaxListingEntries: 2000,
+      })
     for (const value of [-1, 1.5]) {
       expect(() => ApiProxyService.Config({ coldBlankProbeMaxBytes: value })).toThrow()
     }
