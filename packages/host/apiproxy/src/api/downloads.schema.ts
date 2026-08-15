@@ -24,3 +24,21 @@ export const sessionLogQuerySchema = z
     sessionId: query.sessionId,
     ...(query.includeDescendants === 'true' ? { includeDescendants: true } : {}),
   })) satisfies z.ZodType<Parameters<DownloadsApi['sessionLog']>[0]>
+
+/** Absolute path spellings (POSIX root, Windows root, drive letter) — workspace-relative by contract. */
+const ABSOLUTE_PATH = /^[/\\]|[A-Za-z]:[/\\]/
+
+/** A `..` traversal segment — rejected at the wire; containment re-checks the resolved path. */
+const PARENT_SEGMENT = /(^|[/\\])\.\.([/\\]|$)/
+
+/**
+ * files download query params → the workspaceFile request. The path is
+ * workspace-relative by the same contract as the files RPC domain.
+ */
+export const workspaceFileQuerySchema = z
+  .object({
+    sessionId: sessionIdSchema,
+    path: z.string().min(1).max(4096)
+      .refine(path => !ABSOLUTE_PATH.test(path), { message: 'path must be workspace-relative' })
+      .refine(path => !PARENT_SEGMENT.test(path), { message: 'path must not traverse outside the workspace' }),
+  }) satisfies z.ZodType<Parameters<DownloadsApi['workspaceFile']>[0]>

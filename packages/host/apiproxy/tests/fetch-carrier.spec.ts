@@ -289,8 +289,25 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
     async respond(message: ClientResponse): Promise<RpcReceipt> {
       return message.rpcId === 'known' ? { accepted: true } : { accepted: false, reason: 'not-pending' }
     },
+    files: {
+      async list(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { path: '', entries: [], truncated: false } } }
+      },
+      async read(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { content: '', size: 0, truncated: false } } }
+      },
+      async write(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { operation: 'create' as const, version: 'v1', bytes: 0 } } }
+      },
+      async upload(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { operation: 'create' as const, version: 'v1', bytes: 0 } } }
+      },
+    },
     downloads: {
       async sessionLog() {
+        return new Response('stub', { status: 404 })
+      },
+      async workspaceFile() {
         return new Response('stub', { status: 404 })
       },
     },

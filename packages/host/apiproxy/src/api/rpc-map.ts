@@ -14,6 +14,7 @@ import type { SettingsApi } from './settings.ts'
 import type { CredentialsApi } from './credentials.ts'
 import type { LlmApi } from './llm.ts'
 import type { SubagentsApi } from './subagents.ts'
+import type { FilesApi } from './files.ts'
 import type { RpcResponse } from './rpc.ts'
 
 /**
@@ -74,6 +75,10 @@ export interface RpcMethodMap {
   'llm.providers': LlmApi['providers']
   'llm.models': LlmApi['models']
   'llm.discoverModels': LlmApi['discoverModels']
+  'files.list': FilesApi['list']
+  'files.read': FilesApi['read']
+  'files.write': FilesApi['write']
+  'files.upload': FilesApi['upload']
 }
 
 /** Business request payload of method K (reaches through the RpcRequest narrow form to payload). */

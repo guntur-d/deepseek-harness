@@ -2992,6 +2992,16 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     // stub is never reached through the fixture's dispatch.
     downloads: {
       sessionLog: () => Promise.resolve(new Response('fixture mode does not serve session export', { status: 404 })),
+      workspaceFile: () => Promise.resolve(new Response('fixture mode does not serve workspace downloads', { status: 404 })),
+    },
+    // The files panel is a fixture-mode stub: no session owns real files, so
+    // every operation answers a clean unavailable error the UI renders as an
+    // empty panel with an explanation.
+    files: {
+      list: request => err(request, { code: 'internal', message: 'fixture mode has no workspace files', details: {} }),
+      read: request => err(request, { code: 'internal', message: 'fixture mode has no workspace files', details: {} }),
+      write: request => err(request, { code: 'internal', message: 'fixture mode has no workspace files', details: {} }),
+      upload: request => err(request, { code: 'internal', message: 'fixture mode has no workspace files', details: {} }),
     },
   }
 
@@ -3129,6 +3139,10 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'llm.providers': return this.api.llm.providers(request)
       case 'llm.models': return this.api.llm.models(request)
       case 'llm.discoverModels': return this.api.llm.discoverModels(request, signal)
+      case 'files.list': return this.api.files.list(request, signal)
+      case 'files.read': return this.api.files.read(request, signal)
+      case 'files.write': return this.api.files.write(request)
+      case 'files.upload': return this.api.files.upload(request)
     }
   }
 

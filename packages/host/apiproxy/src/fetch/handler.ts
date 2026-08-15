@@ -9,7 +9,7 @@
 import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import type { ApiProxy, MuxFrame, HostFrame } from '../api/index.ts'
-import { sessionLogQuerySchema } from '../api/downloads.schema.ts'
+import { sessionLogQuerySchema, workspaceFileQuerySchema } from '../api/downloads.schema.ts'
 import type { RequestPayload, ResponseValue, RpcMethodMap } from '../api/rpc-map.ts'
 import type { ClientRequest, RpcError, RpcRequest, RpcResponse, ServerRequest, ServerResponse } from '../api/rpc.ts'
 import { RpcId } from '../api/rpc.ts'
@@ -70,6 +70,12 @@ import {
   subagentListRequestSchema,
   subagentPromptRequestSchema,
 } from '../api/subagents.schema.ts'
+import {
+  filesListRequestSchema,
+  filesReadRequestSchema,
+  filesUploadRequestSchema,
+  filesWriteRequestSchema,
+} from '../api/files.schema.ts'
 
 /**
  * Unary dispatch table, keyed by (and compiler-locked to) RpcMethodMap: a map row without a
@@ -140,6 +146,10 @@ const UNARY_ROUTES: UnaryRoutes = {
   'llm.providers': { schema: llmProvidersRequestSchema, invoke: (api, r) => api.llm.providers(r) },
   'llm.models': { schema: llmModelsRequestSchema, invoke: (api, r) => api.llm.models(r) },
   'llm.discoverModels': { schema: llmDiscoverModelsRequestSchema, invoke: (api, r, signal) => api.llm.discoverModels(r, signal) },
+  'files.list': { schema: filesListRequestSchema, invoke: (api, r, signal) => api.files.list(r, signal) },
+  'files.read': { schema: filesReadRequestSchema, invoke: (api, r, signal) => api.files.read(r, signal) },
+  'files.write': { schema: filesWriteRequestSchema, invoke: (api, r) => api.files.write(r) },
+  'files.upload': { schema: filesUploadRequestSchema, invoke: (api, r) => api.files.upload(r) },
 }
 
 /** Route lookup that narrows an arbitrary path segment to a map key (single cast point for the string→key refinement). */
@@ -265,6 +275,16 @@ export function toFetchHandler(api: ApiProxy): { fetch: typeof fetch } {
           return new Response('missing or invalid sessionId query parameter', { status: 400 })
         }
         const response = await api.downloads.sessionLog(parsed.data, req.signal)
+        if (req.method === 'GET') return response
+        await response.body?.cancel()
+        return new Response(null, { status: response.status, headers: response.headers })
+      }
+      if (path === '/api/files.download' && (req.method === 'GET' || req.method === 'HEAD')) {
+        const parsed = workspaceFileQuerySchema.safeParse(Object.fromEntries(url.searchParams))
+        if (!parsed.success) {
+          return new Response('missing or invalid sessionId/path query parameter', { status: 400 })
+        }
+        const response = await api.downloads.workspaceFile(parsed.data, req.signal)
         if (req.method === 'GET') return response
         await response.body?.cancel()
         return new Response(null, { status: response.status, headers: response.headers })
