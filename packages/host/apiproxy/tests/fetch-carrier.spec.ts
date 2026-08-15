@@ -331,6 +331,20 @@ describe('unary round trip (handler ⇄ client, no network)', () => {
     expect(response.rpcId).toMatch(/[0-9a-f-]{36}/)
   })
 
+  it('mints request rpcIds without secure-context crypto.randomUUID', async () => {
+    const randomUUID = vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => {
+      throw new Error('crypto.randomUUID must not be used on insecure origins')
+    })
+    try {
+      const response = await client().sessions.list({})
+      expect(response.result.ok).toBe(true)
+      expect(response.rpcId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+      expect(randomUUID).not.toHaveBeenCalled()
+    } finally {
+      randomUUID.mockRestore()
+    }
+  })
+
   it('carries the tail-page projections block through the wire schema (Zod must not strip it)', async () => {
     const response = await client().sessions.history({ sessionId: 'with-projections' as never })
     expect(response.result.ok).toBe(true)

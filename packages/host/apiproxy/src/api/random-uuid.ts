@@ -1,8 +1,9 @@
-/** Browser-safe UUID generation for client-side wire correlation. */
-
 /**
- * Generate an RFC 4122 version 4 UUID without requiring a secure context.
- * @returns a UUID backed by `crypto.getRandomValues()`, which browsers expose on insecure origins.
+ * Generate an RFC 4122 version 4 UUID for wire correlation ids (rpcId, draft
+ * attachment id) from `crypto.getRandomValues()`, which browsers expose on
+ * insecure origins. `crypto.randomUUID()` is undefined outside secure
+ * contexts (HTTPS or localhost), so plain-HTTP LAN access would throw.
+ * @returns a fresh v4 UUID string.
  */
 export function randomUuid(): string {
   const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16))

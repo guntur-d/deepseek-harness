@@ -88,6 +88,7 @@ export type {
 // ---- Errors and ids ----
 export { RpcId, transportError } from './rpc.ts'
 export type { RpcError, RpcErrorCode, RpcErrorDetailsMap, RpcResult } from './rpc.ts'
+export { randomUuid } from './random-uuid.ts'
 export {
   clientRequestSchema,
   serverRequestSchema,
