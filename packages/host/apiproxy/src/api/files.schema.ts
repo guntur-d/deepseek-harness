@@ -35,10 +35,10 @@ export const base64DataSchema = z
   .regex(/^[A-Za-z0-9+/]*={0,2}$/, { message: 'data must be base64' })
   .refine(data => data.length % 4 === 0, { message: 'data must be a whole number of base64 groups' })
 
-/** files.list request: the owning session and an optional workspace-relative directory. */
+/** files.list request: the owning session and an optional workspace-relative directory (`''` = the workspace root). */
 export const filesListRequestSchema = z.object({
   sessionId: sessionIdSchema,
-  path: workspaceRelativePathSchema.optional(),
+  path: z.union([workspaceRelativePathSchema, z.literal('')]).optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'files.list'>>>
 
 /** files.list value: one directory level plus its truncation flag. */

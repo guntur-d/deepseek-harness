@@ -10,19 +10,23 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { FileContent, FilesEntry, FilesListing } from '@deepseek-ai/dsh-client-connection/client'
 import { FilesView } from '../src/client/FilesView.tsx'
 import type { FilesViewInjected } from '../src/client/contract.ts'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { zh, type FilesKey } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
-const t = (key: FilesKey): string => zh[key]
+// The composed seat accepts the namespace keys plus the shared common
+// vocabulary (the aggregate program merges the locale plugin's `common`
+// dictionary); the zh fixture only serves the namespace's own keys.
+const t = ((key: FilesKey): string => zh[key]) as TranslateNS<'files'>
 
 /** A scripted injected face: each operation is a vi.fn the case programs. */
-function face(overrides: Partial<FilesViewInjected> = {}): FilesViewInjected & { list: ReturnType<typeof vi.fn> } {
+function face(overrides: Partial<FilesViewInjected> = {}): FilesViewInjected {
   return {
-    list: vi.fn(async () => ({ path: '', entries: [], truncated: false })),
-    read: vi.fn(async () => ({ content: '', size: 0, truncated: false })),
-    write: vi.fn(async () => ({ operation: 'create' as const, version: 'v1', bytes: 0 })),
-    upload: vi.fn(async () => ({ operation: 'create' as const, version: 'v1', bytes: 0 })),
+    list: vi.fn<FilesViewInjected['list']>(async () => ({ path: '', entries: [], truncated: false })),
+    read: vi.fn<FilesViewInjected['read']>(async () => ({ content: '', size: 0, truncated: false })),
+    write: vi.fn<FilesViewInjected['write']>(async () => ({ operation: 'create' as const, version: 'v1', bytes: 0 })),
+    upload: vi.fn<FilesViewInjected['upload']>(async () => ({ operation: 'create' as const, version: 'v1', bytes: 0 })),
     download: vi.fn(),
     ...overrides,
   }
@@ -138,7 +142,7 @@ describe('FilesView listing', () => {
 
   it('ignores an aborted list resolution (no error notice)', async () => {
     const f = face({
-      list: vi.fn((_path: string, signal: AbortSignal) => new Promise((_resolve, reject) => {
+      list: vi.fn<FilesViewInjected['list']>((_path, signal) => new Promise((_resolve, reject) => {
         signal.addEventListener('abort', () => reject(new Error('aborted')))
       })),
     })

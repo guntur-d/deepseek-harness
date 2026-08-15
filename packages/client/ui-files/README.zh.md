@@ -1,5 +1,7 @@
 # @deepseek-ai/dsh-client-ui-files
 
+[English](README.md) | 中文
+
 工作区范围的文件面板：会话视图中的一个标签页（`文件`，位于 对话 / 轨迹 旁），浏览
 **当前会话的工作区根目录**——列出、打开并编辑文本文件、上传新文件，以及下载任意文件。
 边界由宿主掌握：每个操作都会解析会话的规范 `header.cwd`，并拒绝任何逃逸出该目录的
@@ -40,6 +42,6 @@
 ## 开发
 
 ```sh
-pnpm --filter @deepseek-ai/dsh-client-ui-files test   # jsdom 组件与 bundle 规格
-pnpm --filter @deepseek-ai/dsh-client-ui-files bundle # 重建 lib/client.js
+pnpm --filter @deepseek-ai/dsh-client-ui-files test   # jsdom component + bundle specs
+pnpm --filter @deepseek-ai/dsh-client-ui-files bundle # rebuild lib/client.js
 ```

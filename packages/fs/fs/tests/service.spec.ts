@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { FileSystem, FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
+  FsBytesWriteOutcome,
   FsDirEntry,
   FsEditOutcome,
   FsEditRequest,
@@ -73,6 +74,11 @@ class FakeFileSystem extends FileSystem {
     const before = this.files.get(target.targetKey) ?? null
     this.files.set(target.targetKey, content)
     return { operation: before !== null ? 'update' : 'create', version: FsVersion('v2'), before, after: content }
+  }
+  override async writeBytes(target: FsTarget, data: Uint8Array, _expected?: FsWriteIntent): Promise<FsBytesWriteOutcome> {
+    const before = this.files.get(target.targetKey) ?? null
+    this.files.set(target.targetKey, new TextDecoder().decode(data))
+    return { operation: before !== null ? 'update' : 'create', version: FsVersion('v2') }
   }
   override async editText(target: FsTarget, edit: FsEditRequest): Promise<FsEditOutcome> {
     const content = this.files.get(target.targetKey) ?? ''

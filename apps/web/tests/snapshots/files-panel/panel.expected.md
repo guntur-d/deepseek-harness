@@ -1,0 +1,17 @@
+- region "Files panel":
+  - button "Workspace root"
+  - text: /
+  - button "files-workspace"
+  - button "Refresh"
+  - button "Upload"
+  - list:
+    - listitem:
+      - text: .gitignore 22 B
+      - button "Download"
+    - listitem:
+      - text: notes.txt 21 B
+      - button "Download"
+    - listitem:
+      - text: README.md 21 B
+      - button "Download"
+    - listitem: src/

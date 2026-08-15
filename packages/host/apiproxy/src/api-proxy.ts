@@ -146,6 +146,11 @@ const SESSION_SEARCH_PROVIDER_CALL_LIMIT = 100
 const COLD_SUMMARY_BATCH_SIZE = 16
 /** Default maximum artifact size eligible for one cold blankness read. */
 export const DEFAULT_COLD_BLANK_PROBE_MAX_BYTES = 1024
+export {
+  DEFAULT_FILES_MAX_LISTING_ENTRIES,
+  DEFAULT_FILES_MAX_TEXT_BYTES,
+  DEFAULT_FILES_MAX_TRANSFER_BYTES,
+} from './workspace-files.ts'
 
 /** Conversation message event types (the pagination counting unit). */
 const MESSAGE_TYPES = new Set(['user/message', 'assistant/message'])

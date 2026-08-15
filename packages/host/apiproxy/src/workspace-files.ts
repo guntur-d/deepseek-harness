@@ -166,7 +166,7 @@ export async function readWorkspaceFile(
   /* v8 ignore next -- the local backend reports a byte size for every regular file; the fallback guards backends without size reporting. */
   const size = info.size ?? 0
   try {
-    return await readCappedText(fs, target, path, maxBytes, size, signal)
+    return await readCappedText(fs, target, maxBytes, size, signal)
   } catch (error: unknown) {
     throw mapSeamReadError(error, path)
   }
@@ -176,7 +176,6 @@ export async function readWorkspaceFile(
 async function readCappedText(
   fs: FileSystem,
   target: FsTarget,
-  path: string,
   maxBytes: number,
   size: number,
   signal: AbortSignal,

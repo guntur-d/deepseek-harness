@@ -1,5 +1,7 @@
 # @deepseek-ai/dsh-client-ui-files
 
+English | [中文](README.zh.md)
+
 Workspace-scoped Files panel: a conversation view tab (`Files`, next to Chat /
 Trajectory) browsing the **active session's workspace root** — list, open and
 edit text files, upload new files, and download any file. The host owns the

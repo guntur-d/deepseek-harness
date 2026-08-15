@@ -27,19 +27,27 @@ let base: string
 let workspace: string
 let api: ApiProxy
 let session: Session
-const fibers: Promise<unknown>[] = []
+
+/** One isolated harness boot; dispose tears its fiber down (a second
+ * createApiProxy on one ctx would re-register the questions provider). */
+interface Harness {
+  api: ApiProxy
+  session: Session
+  workspace: string
+  dispose(): Promise<void>
+}
+const harnesses: Harness[] = []
 
 let nextRpc = 1
 function request<P>(payload: P): RpcRequest<P> {
   return { rpcId: RpcId(`files-${String(nextRpc++)}`), payload }
 }
 
-/** Boot one isolated harness (a second createApiProxy on one ctx would re-register the questions provider). */
 async function harness(files?: {
   filesMaxTextBytes?: number
   filesMaxTransferBytes?: number
   filesMaxListingEntries?: number
-}): Promise<{ api: ApiProxy; session: Session; workspace: string; dispose: () => Promise<void> }> {
+}): Promise<Harness> {
   // Base under HOME, NOT tmpdir: the sandbox fence grants /tmp and
   // os.tmpdir() under workspace-write, so an outside dir under HOME is a real
   // denial (same rationale as the fs-sandbox spec).
@@ -56,7 +64,7 @@ async function harness(files?: {
     cwd: workspace,
     ...files,
   })
-  return {
+  const booted: Harness = {
     api,
     session,
     workspace,
@@ -64,6 +72,8 @@ async function harness(files?: {
       for (const fiber of owned) await fiber.dispose()
     },
   }
+  harnesses.push(booted)
+  return booted
 }
 
 beforeEach(async () => {
@@ -76,7 +86,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  for (const fiber of fibers) await fiber.dispose()
+  for (const booted of harnesses) await booted.dispose()
+  harnesses.length = 0
   await rm(base, { recursive: true, force: true })
 })
 
@@ -343,6 +354,12 @@ describe('the wire schema rejects escapes and malformed payloads (400)', () => {
     const booted = await harness()
     return new InProcessApiClient(toFetchHandler(booted.api))
   }
+
+  it('lists the workspace root through the empty-string path', async () => {
+    const c = await client()
+    const response = await c.files.list({ sessionId: session.id, path: '' })
+    expect(response.result.ok).toBe(true)
+  })
 
   it('rejects an absolute path in files.list', async () => {
     const c = await client()

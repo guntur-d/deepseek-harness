@@ -9,6 +9,7 @@ import { Buffer } from 'node:buffer'
 import { posix } from 'node:path'
 import { FileSystem, FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
+  FsBytesWriteOutcome,
   FsDirEntry,
   FsEditOutcome,
   FsEditRequest,
@@ -388,10 +389,16 @@ export class E2BFileSystem extends FileSystem {
       const before = existing === undefined ? null : await this.readForDiff(target, signal)
       const version = await this.writeAtomic(
         target,
-        content,
         existing,
         expected?.kind === 'createIfAbsent',
         signal,
+        async (temporary, versionId) => {
+          const sandbox = await this.ctx.e2b.getSandbox()
+          await sandbox.files.write(temporary, content, {
+            metadata: { [VERSION_METADATA_KEY]: versionId },
+            ...signalOpts(signal),
+          })
+        },
       )
       return {
         operation: existing === undefined ? 'create' : 'update',
@@ -399,6 +406,38 @@ export class E2BFileSystem extends FileSystem {
         before,
         after: normalizeLineEndings(content),
       }
+    })
+  }
+
+  override async writeBytes(
+    target: FsTarget,
+    data: Uint8Array,
+    expected?: FsWriteIntent,
+    signal?: AbortSignal,
+  ): Promise<FsBytesWriteOutcome> {
+    return this.withLock(String(target.targetKey), async () => {
+      const existing = await this.probe(String(target.targetKey), target.displayPath, signal)
+      if (existing !== undefined && entryType(existing) !== 'file') {
+        throw new FsError(`cannot write "${target.displayPath}": not a regular file`, 'FS_NOT_REGULAR_FILE')
+      }
+      this.checkWriteIntent(existing, expected, target)
+      const version = await this.writeAtomic(
+        target,
+        existing,
+        expected?.kind === 'createIfAbsent',
+        signal,
+        // base64 crosses the JSON command channel byte-exact; the SDK's file
+        // writer is text-oriented and would reinterpret the payload.
+        async (temporary) => {
+          const sandbox = await this.ctx.e2b.getSandbox()
+          const encoded = Buffer.from(data).toString('base64')
+          await sandbox.commands.run(
+            `printf %s ${quoteE2BShellArg(encoded)} | base64 -d > ${quoteE2BShellArg(temporary)}`,
+            commandOpts(signal),
+          )
+        },
+      )
+      return { operation: existing === undefined ? 'create' : 'update', version }
     })
   }
 
@@ -423,7 +462,19 @@ export class E2BFileSystem extends FileSystem {
       const before = normalizeLineEndings(raw)
       const after = literalEdit(before, edit, target.displayPath)
       const storage = restoreLineEndings(after, detectsCrlf(raw))
-      const version = await this.writeAtomic(target, storage, existing, false, signal)
+      const version = await this.writeAtomic(
+        target,
+        existing,
+        false,
+        signal,
+        async (temporary, versionId) => {
+          const sandbox = await this.ctx.e2b.getSandbox()
+          await sandbox.files.write(temporary, storage, {
+            metadata: { [VERSION_METADATA_KEY]: versionId },
+            ...signalOpts(signal),
+          })
+        },
+      )
       return { version, before, after }
     })
   }
@@ -509,10 +560,10 @@ export class E2BFileSystem extends FileSystem {
 
   private async writeAtomic(
     target: FsTarget,
-    content: string,
     existing: EntryInfo | undefined,
     createIfAbsent: boolean,
-    signal?: AbortSignal,
+    signal: AbortSignal | undefined,
+    stage: (temporary: string, versionId: string) => Promise<void>,
   ): Promise<ReturnType<typeof FsVersion>> {
     assertNotAborted(signal, 'write')
     const sandbox = await this.ctx.e2b.getSandbox()
@@ -527,10 +578,7 @@ export class E2BFileSystem extends FileSystem {
       stagingDirectoryCreated = true
       await sandbox.commands.run(`chmod 700 -- ${quoteE2BShellArg(stagingDirectory)}`, commandOpts(signal))
       assertNotAborted(signal, 'write')
-      await sandbox.files.write(temporary, content, {
-        metadata: { [VERSION_METADATA_KEY]: versionId },
-        ...signalOpts(signal),
-      })
+      await stage(temporary, versionId)
       assertNotAborted(signal, 'write')
       const mode = existing === undefined ? 0o600 : existing.mode & 0o777
       await sandbox.commands.run(

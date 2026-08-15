@@ -310,6 +310,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Root interface of the unified API. New client-request domain = one new file pair + one field here + one map row.',
     methods: [
       {
+        signature: 'files: FilesApi',
+        description: 'Workspace-scoped file browsing, editing, and upload, addressed by session.',
+        parameters: [],
+      },
+      {
         signature: 'downloads: DownloadsApi',
         description: 'Host-only download surfaces (GET, no wire envelope); absent from IApiClient.',
         parameters: [],
@@ -626,6 +631,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'List direct children of a directory in stable name order. Returns resolved child targets plus cheap metadata only; never reads file contents.',
         parameters: [{ name: 'target', description: 'the resolved directory target.' }, { name: 'signal', description: 'aborts the listing.' }],
         returns: 'one entry per direct child, in stable name order.',
+      },
+      {
+        signature: 'abstract writeBytes( target: FsTarget, data: Uint8Array, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsBytesWriteOutcome>',
+        description: 'Atomically create or replace raw bytes with no encoding or text semantics. The mirror of readBytes: same atomic publication and guard contract as writeText, without a text diff basis (the outcome carries no `before`/`after` content — binary has no text).',
+        parameters: [{ name: 'target', description: 'the resolved target to write.' }, { name: 'data', description: 'the full new file content, at most the consumer\'s chosen bound.' }, { name: 'expected', description: 'the write intent guarding the write; omit for unconditional.' }, { name: 'signal', description: 'aborts before atomic publication takes effect.' }, { name: 'sandboxPolicy', description: 'the per-call mode and workspace root this write runs under; a sandboxing backend fences the write by it, the bare backend ignores it. Omit to leave the backend its own default.' }],
+        returns: 'the outcome, including the version the write produced.',
       },
       {
         signature: 'abstract writeText( target: FsTarget, content: string, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsWriteOutcome>',
@@ -2995,7 +3006,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'DownloadsApi',
-    declaration: 'export interface DownloadsApi {\n    sessionLog(request: {\n        sessionId: SessionId;\n        includeDescendants?: boolean;\n    }, signal: AbortSignal): Promise<Response>;\n}',
+    declaration: 'export interface DownloadsApi {\n    sessionLog(request: {\n        sessionId: SessionId;\n        includeDescendants?: boolean;\n    }, signal: AbortSignal): Promise<Response>;\n    workspaceFile(request: {\n        sessionId: SessionId;\n        path: string;\n    }, signal: AbortSignal): Promise<Response>;\n}',
   },
   {
     name: 'DshEnvironment',
@@ -3030,6 +3041,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface EpochHeader {\n    config: LlmCallConfig;\n    adapterDefaults?: LlmCallConfigAdapterDefaults;\n    system?: string;\n    tools?: ToolSchema[];\n}',
   },
   {
+    name: 'FileContent',
+    declaration: 'export interface FileContent {\n    readonly content: string;\n    readonly size: number;\n    readonly truncated: boolean;\n}',
+  },
+  {
     name: 'FileDiff',
     declaration: 'export interface FileDiff {\n    path: string;\n    oldText: string | null;\n    newText: string;\n}',
   },
@@ -3038,12 +3053,32 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface FileLocation {\n    path: string;\n    line?: number;\n}',
   },
   {
+    name: 'FilesApi',
+    declaration: 'export interface FilesApi {\n    list(request: RpcRequest<{\n        sessionId: SessionId;\n        path?: string;\n    }>, signal: AbortSignal): Promise<RpcResponse<FilesListing>>;\n    read(request: RpcRequest<{\n        sessionId: SessionId;\n        path: string;\n    }>, signal: AbortSignal): Promise<RpcResponse<FileContent>>;\n    write(request: RpcRequest<{\n        sessionId: SessionId;\n        path: string;\n        content: string;\n    }>): Promise<RpcResponse<FileWriteReceipt>>;\n    upload(request: RpcRequest<{\n        sessionId: SessionId;\n        path: string;\n        data: string;\n    }>): Promise<RpcResponse<FileWriteReceipt>>;\n}',
+  },
+  {
+    name: 'FilesEntry',
+    declaration: 'export interface FilesEntry {\n    readonly name: string;\n    readonly type: \'file\' | \'directory\' | \'other\';\n    readonly size?: number;\n}',
+  },
+  {
+    name: 'FilesListing',
+    declaration: 'export interface FilesListing {\n    readonly path: string;\n    readonly entries: readonly FilesEntry[];\n    readonly truncated: boolean;\n}',
+  },
+  {
+    name: 'FileWriteReceipt',
+    declaration: 'export interface FileWriteReceipt {\n    readonly operation: \'create\' | \'update\';\n    readonly version: string;\n    readonly bytes: number;\n}',
+  },
+  {
     name: 'FinishReason',
     declaration: 'export type FinishReason = FinishReasonMap[keyof FinishReasonMap];',
   },
   {
     name: 'FinishReasonMap',
     declaration: 'export interface FinishReasonMap {\n    \'stop\': {\n        kind: \'stop\';\n    };\n    \'tool-calls\': {\n        kind: \'tool-calls\';\n    };\n    \'max-tokens\': {\n        kind: \'max-tokens\';\n    };\n    \'aborted\': {\n        kind: \'aborted\';\n        failure: LlmFailure;\n    };\n    \'error\': {\n        kind: \'error\';\n        failure: LlmFailure;\n    };\n}',
+  },
+  {
+    name: 'FsBytesWriteOutcome',
+    declaration: 'export interface FsBytesWriteOutcome {\n    operation: \'create\' | \'update\';\n    version: FsVersion;\n}',
   },
   {
     name: 'FsDirEntry',
@@ -3635,7 +3670,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RpcErrorDetailsMap',
-    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        reason: string;\n    };\n    \'agent-preset-locked\': {\n        sessionId: SessionId;\n        agentPreset: string;\n    };\n    \'agent-preset-conflict\': {\n        sessionId: SessionId;\n        requestedPreset: string;\n        existingPreset?: string;\n    };\n    \'agent-preset-not-found\': {\n        agentPreset: string;\n      /* …truncated — full shape in source */',
+    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'file-not-found\': {\n        path: string;\n    };\n    \'file-not-directory\': {\n        path: string;\n    };\n    \'file-not-text\': {\n        path: string;\n    };\n    \'file-too-large\': {\n        path: string;\n    };\n    \'file-unreadable\': {\n        path: string;\n    };\n    \'file-write-failed\': {\n        path: string;\n    };\n    \'file-outside-workspace\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n  /* …truncated — full shape in source */',
   },
   {
     name: 'RpcId',
@@ -3644,6 +3679,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RpcReceipt',
     declaration: 'export type RpcReceipt = {\n    accepted: true;\n} | {\n    accepted: false;\n    reason: \'not-pending\' | \'bad-response\';\n};',
+  },
+  {
+    name: 'RpcRequest',
+    declaration: 'export interface RpcRequest<P> {\n    rpcId: RpcId;\n    payload: P;\n}',
+  },
+  {
+    name: 'RpcResponse',
+    declaration: 'export interface RpcResponse<T> {\n    rpcId: RpcId;\n    result: RpcResult<T>;\n}',
   },
   {
     name: 'RpcResult',
