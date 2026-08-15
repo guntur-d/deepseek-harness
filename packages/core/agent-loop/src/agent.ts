@@ -406,7 +406,7 @@ export class ReactLoopAgent implements Agent {
         this.consecutiveToolFailures = 0
         return { kind: 'completed' }
       }
-      const { concluded, errored } = await executeToolCalls(
+      const { concluded, errored, lastError } = await executeToolCalls(
         this.loopCtx, turn, step, toolCalls, signal,
         context => this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context]),
       )
@@ -421,6 +421,7 @@ export class ReactLoopAgent implements Agent {
           content: [{
             type: 'text',
             text: `The turn ended because ${String(this.consecutiveToolFailures)} consecutive tool steps all errored. `
+              + `The last tool error was: ${lastError ?? 'unknown'}. `
               + 'Reply in text: tell the user which tool attempts failed and ask how to proceed.',
           }],
         }), { surfaceOp: 'append' })
