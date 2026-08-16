@@ -230,6 +230,41 @@ describe('FilesView editor', () => {
     await screen.findByText('a.txt')
   })
 
+  it('copies the workspace-relative path from the row action', async () => {
+    const f = face({
+      list: vi.fn(async () => listing([entry('a.txt', 'file', 11)])),
+    })
+    const writeText = vi.fn(() => Promise.resolve())
+    Object.assign(navigator, { clipboard: { writeText } })
+    render(<FilesView {...f} t={t} />)
+    await screen.findByText('a.txt')
+    await act(async () => { fireEvent.click(screen.getByText(zh['panel.copyPath'])) })
+    expect(writeText).toHaveBeenCalledWith('a.txt')
+    await screen.findByText(zh['panel.copied'])
+  })
+
+  it('reports an Error clipboard failure as an error notice', async () => {
+    const f = face({
+      list: vi.fn(async () => listing([entry('a.txt', 'file', 11)])),
+    })
+    Object.assign(navigator, { clipboard: { writeText: () => Promise.reject(new Error('denied')) } })
+    render(<FilesView {...f} t={t} />)
+    await screen.findByText('a.txt')
+    await act(async () => { fireEvent.click(screen.getByText(zh['panel.copyPath'])) })
+    await screen.findByText('denied')
+  })
+
+  it('reports a clipboard failure as an error notice', async () => {
+    const f = face({
+      list: vi.fn(async () => listing([entry('a.txt', 'file', 11)])),
+    })
+    Object.assign(navigator, { clipboard: { writeText: () => Promise.reject(new Error('clipboard blocked')) } })
+    render(<FilesView {...f} t={t} />)
+    await screen.findByText('a.txt')
+    await act(async () => { fireEvent.click(screen.getByText(zh['panel.copyPath'])) })
+    await screen.findByText('clipboard blocked')
+  })
+
   it('shows the read error as a notice', async () => {
     const f = face({
       list: vi.fn(async () => listing([entry('bin.dat', 'file', 4)])),

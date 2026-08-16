@@ -6,10 +6,14 @@ import { collectFiles, fileSource, type MentionScanBudget } from '../src/client/
 const session = { sessionId: 'session-test' as never }
 
 /** A stub files client backed by a flat name → entry map (paths are keys). */
-function filesApi(tree: Record<string, Array<{ name: string; type: 'file' | 'directory'; size?: number }>>, ok = true): IApiClient {
+function filesApi(
+  tree: Record<string, Array<{ name: string; type: 'file' | 'directory'; size?: number }>>,
+  ok = true,
+  truncated = false,
+): IApiClient {
   const list = vi.fn(({ path }: { path: string }) => Promise.resolve({
     rpcId: 'files' as never,
-    result: ok ? { ok: true as const, value: { path, entries: tree[path] ?? [], truncated: false } } : {
+    result: ok ? { ok: true as const, value: { path, entries: tree[path] ?? [], truncated } } : {
       ok: false as const,
       error: { code: 'file-unreadable' as const, message: 'nope', details: {} },
     },
@@ -17,10 +21,16 @@ function filesApi(tree: Record<string, Array<{ name: string; type: 'file' | 'dir
   return { files: { list } } as never
 }
 
+/** The list spy behind a {@link filesApi} client, for call-count assertions. */
+function listSpy(api: IApiClient): ReturnType<typeof vi.fn> {
+  return (api.files as unknown as { list: ReturnType<typeof vi.fn> }).list
+}
+
 const budget: MentionScanBudget = {
   maxFiles: 10,
   maxDepth: 8,
   ignoreDirs: new Set(['node_modules', '.git', 'dist']),
+  cacheTtlMs: 60_000,
 }
 
 describe('collectFiles', () => {
@@ -83,7 +93,7 @@ describe('collectFiles', () => {
     expect(truncated).toBe(false)
   })
 
-  it('stops descending after the cap and skips subtrees whose listing rejects', async () => {
+  it('stops descending after the cap and reports truncation at the top of a subtree walk', async () => {
     const api = filesApi({
       '': [
         { name: 'a.txt', type: 'file' }, { name: 'b.txt', type: 'file' },
@@ -91,20 +101,20 @@ describe('collectFiles', () => {
         { name: 'e.txt', type: 'file' }, { name: 'f.txt', type: 'file' },
         { name: 'g.txt', type: 'file' }, { name: 'h.txt', type: 'file' },
         { name: 'i.txt', type: 'file' }, { name: 'j.txt', type: 'file' },
-        { name: 'broken', type: 'directory' },
+        { name: 'more', type: 'directory' },
       ],
-      'broken': [{ name: 'x.txt', type: 'file' }],
+      'more': [{ name: 'k.txt', type: 'file' }],
     })
+    const { files, truncated } = await collectFiles(api, session.sessionId, '', budget, new AbortController().signal)
+    expect(files).toHaveLength(10)
+    expect(truncated).toBe(true)
+  })
+
+  it('ends the scan when a subtree listing rejects', async () => {
     const tree: Record<string, Array<{ name: string; type: 'file' | 'directory' }>> = {
-      '': [
-        { name: 'a.txt', type: 'file' }, { name: 'b.txt', type: 'file' },
-        { name: 'c.txt', type: 'file' }, { name: 'd.txt', type: 'file' },
-        { name: 'e.txt', type: 'file' }, { name: 'f.txt', type: 'file' },
-        { name: 'g.txt', type: 'file' }, { name: 'h.txt', type: 'file' },
-        { name: 'i.txt', type: 'file' }, { name: 'j.txt', type: 'file' },
-        { name: 'broken', type: 'directory' },
-      ],
+      '': [{ name: 'broken', type: 'directory' }],
     }
+    const api = filesApi(tree)
     ;(api.files.list as unknown as { mockImplementation: (fn: (request: { path: string }) => Promise<unknown>) => void })
       .mockImplementation(({ path }) => path === 'broken'
         ? Promise.reject(new Error('aborted'))
@@ -113,8 +123,29 @@ describe('collectFiles', () => {
           result: { ok: true as const, value: { path, entries: tree[path] ?? [], truncated: false } },
         }))
     const { files, truncated } = await collectFiles(api, session.sessionId, '', budget, new AbortController().signal)
-    expect(files).toHaveLength(10)
+    expect(files).toEqual([])
+    expect(truncated).toBe(false)
+  })
+
+  it('marks the scan truncated when a listing reports truncation', async () => {
+    const api = filesApi({
+      '': [{ name: 'a.txt', type: 'file' }],
+    }, true, true)
+    const { files, truncated } = await collectFiles(api, session.sessionId, '', budget, new AbortController().signal)
+    expect(files).toHaveLength(1)
     expect(truncated).toBe(true)
+  })
+
+  it('returns immediately when the signal already aborted', async () => {
+    const api = filesApi({
+      '': [{ name: 'a.txt', type: 'file' }],
+    })
+    const controller = new AbortController()
+    controller.abort()
+    const { files, truncated } = await collectFiles(api, session.sessionId, '', budget, controller.signal)
+    expect(files).toEqual([])
+    expect(truncated).toBe(false)
+    expect(listSpy(api)).not.toHaveBeenCalled()
   })
 })
 
@@ -147,6 +178,55 @@ describe('fileSource', () => {
     const source = fileSource(filesApi({}, false), budget, 'truncated')
     const entries = await source.candidates(session, { query: '', position: 'leading', signal: new AbortController().signal })
     expect(entries).toEqual([])
+  })
+
+  it('filters the cached tree on subsequent queries instead of re-walking', async () => {
+    const api = filesApi({
+      '': [{ name: 'a.txt', type: 'file' }, { name: 'b.txt', type: 'file' }],
+    })
+    const source = fileSource(api, budget, 'truncated')
+    await source.candidates(session, { query: '', position: 'leading', signal: new AbortController().signal })
+    await source.candidates(session, { query: 'a', position: 'leading', signal: new AbortController().signal })
+    expect(listSpy(api)).toHaveBeenCalledTimes(1)
+  })
+
+  it('builds the cache even when the pipeline signal already aborted', async () => {
+    const api = filesApi({
+      '': [{ name: 'a.txt', type: 'file' }, { name: 'b.txt', type: 'file' }],
+    })
+    const source = fileSource(api, budget, 'truncated')
+    const controller = new AbortController()
+    controller.abort()
+    // The source's detached scan ignores the pipeline abort (the controller
+    // drops the stale settle); the cache gets populated either way.
+    const stale = await source.candidates(session, { query: '', position: 'leading', signal: controller.signal })
+    expect(stale.map(candidate => candidate.name)).toEqual(['a.txt', 'b.txt'])
+    // The next live query filters the cached tree without re-walking.
+    const fresh = await source.candidates(session, { query: 'b', position: 'leading', signal: new AbortController().signal })
+    expect(fresh.map(candidate => candidate.name)).toEqual(['b.txt'])
+    expect(listSpy(api)).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares one in-flight scan between concurrent queries', async () => {
+    const api = filesApi({
+      '': [{ name: 'a.txt', type: 'file' }],
+    })
+    const source = fileSource(api, budget, 'truncated')
+    await Promise.all([
+      source.candidates(session, { query: '', position: 'leading', signal: new AbortController().signal }),
+      source.candidates(session, { query: '', position: 'leading', signal: new AbortController().signal }),
+    ])
+    expect(listSpy(api)).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-walks the tree after the cache TTL expires', async () => {
+    const api = filesApi({
+      '': [{ name: 'a.txt', type: 'file' }],
+    })
+    const source = fileSource(api, { ...budget, cacheTtlMs: -1 }, 'truncated')
+    await source.candidates(session, { query: '', position: 'leading', signal: new AbortController().signal })
+    await source.candidates(session, { query: '', position: 'leading', signal: new AbortController().signal })
+    expect(listSpy(api)).toHaveBeenCalledTimes(2)
   })
 
   it('picks insert the workspace-relative path with a trailing space', () => {

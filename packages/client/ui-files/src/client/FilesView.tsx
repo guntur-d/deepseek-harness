@@ -241,6 +241,25 @@ export function FilesView({
                   >
                     {t('panel.download')}
                   </button>
+                  <button
+                    type="button"
+                    className={css.button}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void navigator.clipboard.writeText(joinPath(directory, entry.name)).then(
+                        () => { setNotice({ kind: 'info', text: t('panel.copied') }) },
+                        (error: unknown) => {
+                          setNotice({
+                            kind: 'error',
+                            /* v8 ignore next -- the clipboard rejects with an Error in tests; the arm guards a non-Error rejection. */
+                            text: error instanceof Error ? error.message : String(error),
+                          })
+                        },
+                      )
+                    }}
+                  >
+                    {t('panel.copyPath')}
+                  </button>
                 </span>
               )}
             </div>

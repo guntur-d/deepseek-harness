@@ -15,6 +15,8 @@ export type FilesKey =
   | 'panel.upload'
   | 'panel.open'
   | 'panel.download'
+  | 'panel.copyPath'
+  | 'panel.copied'
   | 'panel.save'
   | 'panel.close'
   | 'panel.edit'
@@ -46,6 +48,8 @@ export const zh: Record<FilesKey, string> = {
   'panel.upload': '上传',
   'panel.open': '打开',
   'panel.download': '下载',
+  'panel.copyPath': '复制路径',
+  'panel.copied': '已复制路径',
   'panel.save': '保存',
   'panel.close': '关闭',
   'panel.edit': '编辑',
@@ -71,6 +75,8 @@ export const en: Record<FilesKey, string> = {
   'panel.upload': 'Upload',
   'panel.open': 'Open',
   'panel.download': 'Download',
+  'panel.copyPath': 'Copy path',
+  'panel.copied': 'Path copied',
   'panel.save': 'Save',
   'panel.close': 'Close',
   'panel.edit': 'Edit',

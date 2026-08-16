@@ -36,6 +36,8 @@ export interface Config {
   mentionMaxDepth?: number
   /** Directory names the `@` mention scan skips (build/dependency output). */
   mentionIgnoreDirs?: string[]
+  /** Milliseconds one scanned directory tree stays cached for `@` filtering (default 60_000). */
+  mentionCacheTtlMs?: number
 }
 
 export const Config: z<Config> = z.object({
@@ -45,6 +47,7 @@ export const Config: z<Config> = z.object({
     '.git', '.hg', '.svn', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt',
     '.cache', '__pycache__', 'target', 'venv', '.venv', '.idea', '.vscode', 'coverage',
   ]),
+  mentionCacheTtlMs: z.natural().default(60_000),
 })
 
 /** The mention scan's default budget, shared by the schema defaults and tests.
@@ -56,6 +59,7 @@ export function mentionBudget(config: Config): MentionScanBudget {
     maxFiles: config.mentionMaxFiles as number,
     maxDepth: config.mentionMaxDepth as number,
     ignoreDirs: new Set(config.mentionIgnoreDirs as string[]),
+    cacheTtlMs: config.mentionCacheTtlMs as number,
   }
 }
 

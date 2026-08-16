@@ -20,6 +20,8 @@ export interface MentionScanBudget {
   readonly maxDepth: number
   /** Directory names the scan skips (build/dependency output). */
   readonly ignoreDirs: ReadonlySet<string>
+  /** Milliseconds one scanned directory tree stays cached for `@` filtering. */
+  readonly cacheTtlMs: number
 }
 
 /** One collected file: its workspace-relative path and optional byte size. */
@@ -33,6 +35,20 @@ function splitQuery(query: string): { dir: string; prefix: string } {
   const slash = query.lastIndexOf('/')
   if (slash === -1) return { dir: '', prefix: query }
   return { dir: query.slice(0, slash), prefix: query.slice(slash + 1) }
+}
+
+/** One directory listing, or undefined when the request was aborted or failed. */
+async function listDirectory(
+  api: IApiClient,
+  sessionId: SessionId,
+  path: string,
+  signal: AbortSignal,
+): Promise<Awaited<ReturnType<IApiClient['files']['list']>> | undefined> {
+  try {
+    return await api.files.list({ sessionId, path }, signal)
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -55,7 +71,7 @@ export async function collectFiles(
 ): Promise<{ files: MentionFile[]; truncated: boolean }> {
   const files: MentionFile[] = []
   let truncated = false
-  const walk = async (path: string, depth: number): Promise<void> => {
+  async function walk(path: string, depth: number): Promise<void> {
     if (signal.aborted || files.length >= budget.maxFiles || depth > budget.maxDepth) {
       if (files.length >= budget.maxFiles || depth > budget.maxDepth) truncated = true
       return
@@ -63,16 +79,15 @@ export async function collectFiles(
     // An aborted or failed listing ends that subtree's scan; the per-keystroke
     // signal supersedes stale scans, and a broken directory should not fail
     // the whole mention.
-    let listing: Awaited<ReturnType<IApiClient['files']['list']>>
-    try {
-      listing = await api.files.list({ sessionId, path }, signal)
-    } catch {
+    const listing = await listDirectory(api, sessionId, path, signal)
+    if (listing === undefined) {
       return
     }
-    const { result } = listing
-    if (!result.ok) return
-    if (result.value.truncated) truncated = true
-    for (const entry of result.value.entries) {
+    if (!listing.result.ok) {
+      return
+    }
+    if (listing.result.value.truncated) truncated = true
+    for (const entry of listing.result.value.entries) {
       if (files.length >= budget.maxFiles) {
         truncated = true
         return
@@ -105,12 +120,38 @@ export function fileSource(
   budget: MentionScanBudget,
   truncatedHint: string,
 ): InputTriggerSource {
+  // The per-keystroke pipeline supersedes stale candidates; without a cache
+  // every keystroke would re-walk the whole tree and abort the previous walk
+  // mid-flight (an aborted-fetch storm in the console). Each scanned
+  // directory tree is cached for the budget's TTL. The scan that populates
+  // the cache runs detached and single-flight: a keystroke aborting the
+  // previous candidates must not kill the one walk the cache needs — the
+  // walk is bounded by the budget (file/depth caps), and later queries
+  // filter the completed tree instead of restarting it.
+  const treeCache = new Map<string, { files: MentionFile[]; truncated: boolean; expires: number }>()
+  const inflight = new Map<string, Promise<{ files: MentionFile[]; truncated: boolean }>>()
+  const scanTree = async (sessionId: string, dir: string): Promise<{ files: MentionFile[]; truncated: boolean }> => {
+    const key = `${sessionId}\u0000${dir}`
+    const cached = treeCache.get(key)
+    if (cached !== undefined && cached.expires >= Date.now()) return cached
+    let pending = inflight.get(key)
+    if (pending === undefined) {
+      pending = (async () => {
+        const collected = await collectFiles(api, sessionId as never, dir, budget, new AbortController().signal)
+        treeCache.set(key, { ...collected, expires: Date.now() + budget.cacheTtlMs })
+        return collected
+      })()
+      inflight.set(key, pending)
+      void pending.finally(() => { inflight.delete(key) })
+    }
+    return pending
+  }
   return {
     trigger: '@',
     name: 'files',
-    async candidates(session, { query, signal }) {
+    async candidates(session, { query }) {
       const { dir, prefix } = splitQuery(query)
-      const { files, truncated } = await collectFiles(api, session.sessionId, dir, budget, signal)
+      const { files, truncated } = await scanTree(session.sessionId, dir)
       return files
         .filter(file => file.name.split('/').pop()?.includes(prefix) === true)
         .map(file => ({
