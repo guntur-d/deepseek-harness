@@ -16,29 +16,66 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 // owning package) must be in the program for the register calls to type.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { FilesView } from './FilesView.tsx'
-import { fileSource } from './file-source.ts'
+import { fileSource, type MentionScanBudget } from './file-source.ts'
 import type { FilesViewInjected } from './contract.ts'
 import type { InputTriggerServiceContract } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { en, NS, zh } from './locales.ts'
+import z from '@deepseek-ai/schemastery'
 
 export type { FilesViewInjected } from './contract.ts'
+export type { MentionScanBudget } from './file-source.ts'
 
-/** Required services: the view slot, the wire client, and the locale service. */
+/** Required services: the view slot, the wire client, the locale service, and the trigger pipeline. */
 export const inject = ['slots', 'connection', 'locale', 'inputTriggers']
 
-/**
- * Client plugin body: register the Files view tab. The registration rides
- * the slot service's effect wrapper, so plugin unload removes the tab.
- * @param ctx - client root context.
+/** Plugin config, validated by the same-named schemastery schema. */
+export interface Config {
+  /** Maximum files one `@` mention scan returns before the tail is dropped (default 400). */
+  mentionMaxFiles?: number
+  /** Maximum directory depth one `@` mention scan descends (default 8). */
+  mentionMaxDepth?: number
+  /** Directory names the `@` mention scan skips (build/dependency output). */
+  mentionIgnoreDirs?: string[]
+}
+
+export const Config: z<Config> = z.object({
+  mentionMaxFiles: z.natural().default(400),
+  mentionMaxDepth: z.natural().default(8),
+  mentionIgnoreDirs: z.array(String).default([
+    '.git', '.hg', '.svn', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt',
+    '.cache', '__pycache__', 'target', 'venv', '.venv', '.idea', '.vscode', 'coverage',
+  ]),
+})
+
+/** The mention scan's default budget, shared by the schema defaults and tests.
+ * @param config - the validated plugin config.
+ * @returns the resolved scan budget with schema defaults applied.
  */
-export function apply(ctx: ClientContext): void {
+export function mentionBudget(config: Config): MentionScanBudget {
+  return {
+    maxFiles: config.mentionMaxFiles as number,
+    maxDepth: config.mentionMaxDepth as number,
+    ignoreDirs: new Set(config.mentionIgnoreDirs as string[]),
+  }
+}
+
+/**
+ * Client plugin body: register the Files view tab and the `@` file source.
+ * The registration rides the slot service's effect wrapper, so plugin unload
+ * removes the tab.
+ * @param ctx - client root context.
+ * @param config - validated {@link Config}.
+ */
+export function apply(ctx: ClientContext, config?: Config): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-files: dictionaries')
   const t = ctx.locale.bind(NS)
   const api = (ctx.get('connection') as ConnectionHandle).api
   // The '@' trigger source: workspace file references in the composer. It
   // rides the same session-scoped files client as the panel below.
   const inputTriggers = ctx.get('inputTriggers') as InputTriggerServiceContract
-  ctx.effect(() => inputTriggers.registerSource(fileSource(api)), 'ui-files: @ file source')
+  ctx.effect(() => inputTriggers.registerSource(
+    fileSource(api, mentionBudget(config ?? {}), t('mention.truncated')),
+  ), 'ui-files: @ file source')
 
   ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view',

@@ -25,6 +25,7 @@ export type FilesKey =
   | 'panel.tooLarge'
   | 'panel.uploaded'
   | 'panel.uploadError'
+  | 'mention.truncated'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -54,6 +55,7 @@ export const zh: Record<FilesKey, string> = {
   'panel.notText': '该文件不是文本，无法预览。',
   'panel.tooLarge': '文件超出大小限制。',
   'panel.uploaded': '上传成功',
+  'mention.truncated': '列表过长，已截断',
   'panel.uploadError': '上传失败',
 }
 
@@ -78,5 +80,6 @@ export const en: Record<FilesKey, string> = {
   'panel.notText': 'This file is not text and cannot be previewed.',
   'panel.tooLarge': 'The file exceeds the size limit.',
   'panel.uploaded': 'Uploaded',
+  'mention.truncated': 'Listing truncated',
   'panel.uploadError': 'Upload failed',
 }

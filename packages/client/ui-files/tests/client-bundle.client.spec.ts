@@ -65,7 +65,7 @@ describe('tsdown client artifact', () => {
     const { handoff, exports } = await loadArtifact()
     expect(handoff.id).toBe(PLUGIN_ID)
     expect(exports.apply).toBeTypeOf('function')
-    expect(exports.inject).toEqual(['slots', 'connection', 'locale'])
+    expect(exports.inject).toEqual(['slots', 'connection', 'locale', 'inputTriggers'])
   })
 
   it.skipIf(code === undefined)('mounted as an object plugin, apply registers the Files tab on the real ring', async () => {
@@ -84,6 +84,7 @@ describe('tsdown client artifact', () => {
     ctx.provide('connection', { api: { settings: {} }, isLoopback: false } as never)
     ctx.provide('remote', { $on: () => () => {} } as never)
     ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
+    ctx.provide('inputTriggers', { registerSource: () => () => {} } as never)
     const locale = await import('@deepseek-ai/dsh-client-locale/client')
     ctx.plugin({ inject: [...locale.inject], apply: locale.apply })
     const fiber = ctx.plugin(exports as { apply: (ctx: Context) => void })
