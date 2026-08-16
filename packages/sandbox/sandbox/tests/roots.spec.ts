@@ -36,4 +36,18 @@ describe('writableRoots', () => {
     // Deduplicated after canonicalization (/tmp and os.tmpdir() may coincide).
     expect(new Set(roots).size).toBe(roots.length)
   })
+
+  it('never grants the POSIX /tmp literal on Windows, where it would resolve to <drive>:\tmp', () => {
+    const ws = mkdtempSync(join(tmpdir(), 'dsh-ws-'))
+    const roots = writableRoots({ mode: 'workspace-write', workspaceRoot: ws }, 'win32')
+    expect(roots).toContain(realpathSync.native(ws))
+    expect(roots).toContain(realpathSync.native(tmpdir()))
+    expect(roots.some(root => /\\tmp$/i.test(root))).toBe(false)
+  })
+
+  it('keeps /tmp for POSIX platforms even when derived for another platform', () => {
+    const ws = mkdtempSync(join(tmpdir(), 'dsh-ws-'))
+    const roots = writableRoots({ mode: 'workspace-write', workspaceRoot: ws }, 'linux')
+    expect(roots).toContain(canonicalPath('/tmp'))
+  })
 })

@@ -14,7 +14,7 @@
  */
 
 import { realpathSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { platform, tmpdir } from 'node:os'
 import type { SandboxExecutionPolicy } from './index.ts'
 
 /**
@@ -46,10 +46,25 @@ export function canonicalPath(path: string): string {
  * `workspace-write` allows the policy's workspace root, the host `/tmp`, and
  * the per-user platform temp dir (`os.tmpdir()` — the real temp area for
  * mkstemp-family tools; omitting it would deny what the mode promises).
+ *
+ * The POSIX `/tmp` spelling is deliberately POSIX-only: on Windows it is not
+ * a real temp area, and `realpathSync.native('/tmp')` resolves it against
+ * the process's current drive — when `<drive>:\tmp` exists the fence would
+ * silently grant it as a writable root. `os.tmpdir()` already carries the
+ * Windows temp area, so the literal adds nothing there but the grant.
  * @param policy - the file-effect policy to derive the allow-list from.
+ * @param platformName - the platform to derive for (injectable for
+ * deterministic cross-platform tests; defaults to the running platform).
  * @returns the canonical writable roots; empty exactly under `read-only`.
  */
-export function writableRoots(policy: SandboxExecutionPolicy): string[] {
+export function writableRoots(
+  policy: SandboxExecutionPolicy,
+  platformName: NodeJS.Platform = platform(),
+): string[] {
   if (policy.mode !== 'workspace-write') return []
-  return [...new Set([policy.workspaceRoot, '/tmp', tmpdir()].map(canonicalPath))]
+  return [...new Set([
+    policy.workspaceRoot,
+    ...(platformName === 'win32' ? [] : ['/tmp']),
+    tmpdir(),
+  ].map(canonicalPath))]
 }
