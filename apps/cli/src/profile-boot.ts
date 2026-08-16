@@ -36,7 +36,8 @@ const SHIPPED_PRESET_ROOT = fileURLToPath(new URL('../config/agent-presets/', im
 
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
-import { createProcessShutdown, type ProcessShutdown } from './process-shutdown.ts'
+import { platform } from 'node:os'
+import { createProcessShutdown, WIN32_SIGINT_GRACE_MS, type ProcessShutdown } from './process-shutdown.ts'
 
 const NAME = 'dsh'
 
@@ -209,9 +210,9 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   const app: { current?: Context } = {}
   const shutdown = createProcessShutdown(async () => { await app.current?.fiber.dispose() })
   const signalShutdown = new AbortController()
-  const interrupt = (code: number): void => {
+  const interrupt = (code: number, graceMs?: number): void => {
     signalShutdown.abort()
-    shutdown.interrupt(code)
+    shutdown.interrupt(code, graceMs)
   }
   // Signals own teardown throughout the startup window, not only after boot()
   // settles: an inserted provider can publish before sibling rows finish mounting.
@@ -219,7 +220,11 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // surface — the launcher does not know whether the app considered its work
   // complete; SIGINT is a user interrupt and reports 130.
   process.on('SIGTERM', () => { interrupt(0) })
-  process.on('SIGINT', () => { interrupt(130) })
+  // On Windows a SIGINT listener answers CTRL_C_EVENT itself; keep the grace
+  // tiny so the shell's console input survives the interrupt (PSReadLine).
+  process.on('SIGINT', () => {
+    interrupt(130, platform() === 'win32' ? WIN32_SIGINT_GRACE_MS : undefined)
+  })
   installFailLoud(NAME, process, async () => {
     await app.current?.fiber.dispose()
   })

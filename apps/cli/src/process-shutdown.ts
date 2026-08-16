@@ -3,12 +3,21 @@
 /** Maximum grace allowed for the application tree to dispose before process exit. */
 export const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000
 
+/**
+ * Win32 SIGINT grace. On Windows a registered SIGINT listener answers
+ * `CTRL_C_EVENT` itself, so PowerShell never sees the interrupt — and
+ * PowerShell 5.1's PSReadLine breaks if the process then stalls for the full
+ * 5s window (no prompt, no echo, dead input). A user interrupt on Windows
+ * therefore exits nearly immediately, aligned with vite/npm behavior.
+ */
+export const WIN32_SIGINT_GRACE_MS = 300
+
 /** Process-exit controller shared by normal completion and Unix signal handlers. */
 export interface ProcessShutdown {
   /** Start or join graceful disposal before allowing natural completion with `code`. */
   shutdown(code: number): Promise<void>
   /** Start graceful disposal followed by exit, or force exit when shutdown is already running. */
-  interrupt(code: number): void
+  interrupt(code: number, graceMs?: number): void
 }
 
 /**
@@ -49,9 +58,9 @@ export function createProcessShutdown(
     complete(code)
   }
 
-  const start = (code: number, forceAfterDispose: boolean): Promise<void> => {
+  const start = (code: number, forceAfterDispose: boolean, graceMs: number): Promise<void> => {
     if (pending !== undefined) return pending
-    timeout = setTimeout(() => { forceExitOnce(code) }, timeoutMs)
+    timeout = setTimeout(() => { forceExitOnce(code) }, graceMs)
     pending = Promise.resolve().then(dispose).then(
       () => {
         if (forceAfterDispose) forceExitOnce(code)
@@ -64,14 +73,14 @@ export function createProcessShutdown(
 
   return {
     shutdown(code) {
-      return start(code, false)
+      return start(code, false, timeoutMs)
     },
-    interrupt(code) {
+    interrupt(code, graceMs = timeoutMs) {
       if (pending !== undefined) {
         forceExitOnce(code)
         return
       }
-      void start(code, true)
+      void start(code, true, graceMs)
     },
   }
 }
