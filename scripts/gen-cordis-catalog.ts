@@ -315,6 +315,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   FsVersion: 'filesystem.md',
   FsWriteIntent: 'filesystem.md',
   FsWriteOutcome: 'filesystem.md',
+  FsBytesWriteOutcome: 'filesystem.md',
   CreateGoalRequest: 'goal.md',
   EditGoalRequest: 'goal.md',
   GoalBlockReason: 'goal.md',

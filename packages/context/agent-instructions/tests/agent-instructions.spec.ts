@@ -11,6 +11,7 @@ import AgentRegistry, { agentEvents, Inbox, type Agent } from '@deepseek-ai/dsh-
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { FileSystem, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
+  FsBytesWriteOutcome,
   FsDirEntry,
   FsEditOutcome,
   FsEditRequest,
@@ -141,6 +142,10 @@ class RecordingFileSystem extends FileSystem {
 
   override async writeText(_target: FsTarget, _content: string, _expected?: FsWriteIntent): Promise<FsWriteOutcome> {
     return { operation: 'update', version: FsVersion('unused'), before: '', after: _content }
+  }
+
+  override async writeBytes(_target: FsTarget, _data: Uint8Array, _expected?: FsWriteIntent): Promise<FsBytesWriteOutcome> {
+    return { operation: 'update', version: FsVersion('unused') }
   }
 
   override async editText(_target: FsTarget, _edit: FsEditRequest): Promise<FsEditOutcome> {

@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
-import { FileSystem, FsError, FsVersion, type FsDirEntry, type FsEditOutcome, type FsEditRequest, type FsInfo, type FsPathInfo, type FsTarget, type FsWriteOutcome } from '@deepseek-ai/dsh-fs'
+import { FileSystem, FsError, FsVersion, type FsBytesWriteOutcome, type FsDirEntry, type FsEditOutcome, type FsEditRequest, type FsInfo, type FsPathInfo, type FsTarget, type FsWriteOutcome } from '@deepseek-ai/dsh-fs'
 import * as SkillFileSystem from '../src/index.ts'
 
 async function tempDir(name: string): Promise<string> {
@@ -131,6 +131,12 @@ class TestFileSystem extends FileSystem {
     await mkdir(dirname(target.displayPath), { recursive: true })
     await writeFile(target.displayPath, content)
     return { operation: 'create', version: FsVersion('test'), before: null, after: content }
+  }
+
+  override async writeBytes(target: FsTarget, data: Uint8Array): Promise<FsBytesWriteOutcome> {
+    await mkdir(dirname(target.displayPath), { recursive: true })
+    await writeFile(target.displayPath, data)
+    return { operation: 'create', version: FsVersion('test') }
   }
 
   override async editText(_target: FsTarget, _request: FsEditRequest): Promise<FsEditOutcome> {

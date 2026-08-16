@@ -195,7 +195,14 @@ export class AppWebEntry {
     // same entry lifecycle so the sweep and status cover it uniformly.
     await Promise.all(rows.map(async (name) => {
       this.status.set(name, 'loading')
-      const id = await loader.create({ name })
+      const row = this.manifest.plugins.find(candidate => candidate.id === name)
+      // The graph row's evaluated config reaches the plugin through the entry
+      // (the loader hands entry options.config to apply); rows without one
+      // fall back to the plugin's own Config defaults.
+      const id = await loader.create({
+        name,
+        ...(row?.config === undefined ? {} : { config: row.config }),
+      })
       // A failed import leaves the entry fiberless (Entry._init logs and
       // returns); project it as failed — no fiber means no status event.
       if (loader.resolve(id).fiber === undefined) {

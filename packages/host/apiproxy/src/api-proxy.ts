@@ -51,6 +51,18 @@ import {
   type SessionLogExportReady,
   type SessionLogCompressionLevel,
 } from './session-export.ts'
+import {
+  DEFAULT_FILES_MAX_LISTING_ENTRIES,
+  DEFAULT_FILES_MAX_TEXT_BYTES,
+  DEFAULT_FILES_MAX_TRANSFER_BYTES,
+  downloadWorkspaceFile,
+  listWorkspaceFiles,
+  readWorkspaceFile,
+  uploadWorkspaceBytes,
+  workspaceRootOf,
+  writeWorkspaceText,
+  WorkspaceFilesError,
+} from './workspace-files.ts'
 import type { SessionRawArtifact } from '@deepseek-ai/dsh-session-persistence'
 import {
   SESSION_SEARCH_RESULT_LIMIT,
@@ -134,6 +146,11 @@ const SESSION_SEARCH_PROVIDER_CALL_LIMIT = 100
 const COLD_SUMMARY_BATCH_SIZE = 16
 /** Default maximum artifact size eligible for one cold blankness read. */
 export const DEFAULT_COLD_BLANK_PROBE_MAX_BYTES = 1024
+export {
+  DEFAULT_FILES_MAX_LISTING_ENTRIES,
+  DEFAULT_FILES_MAX_TEXT_BYTES,
+  DEFAULT_FILES_MAX_TRANSFER_BYTES,
+} from './workspace-files.ts'
 
 /** Conversation message event types (the pagination counting unit). */
 const MESSAGE_TYPES = new Set(['user/message', 'assistant/message'])
@@ -632,6 +649,14 @@ function directoryError(error: unknown): RpcError {
   return { code: 'internal', message: error instanceof Error ? error.message : String(error), details: {} }
 }
 
+/** Map a workspace-files failure onto the wire error vocabulary (unknown throws stay internal). */
+function filesError(error: unknown): RpcError {
+  if (error instanceof WorkspaceFilesError) {
+    return { code: error.code, message: error.message, details: { path: error.path } }
+  }
+  return { code: 'internal', message: error instanceof Error ? error.message : String(error), details: {} }
+}
+
 /** Resolved Agent model and project-directory defaults consumed by the API implementation. */
 export interface ApiProxyDefaults {
   /**
@@ -659,6 +684,12 @@ export interface ApiProxyDefaults {
   sessionExportCompressionLevel?: SessionLogCompressionLevel
   /** Maximum artifact size eligible for one cold blankness read. */
   coldBlankProbeMaxBytes?: number
+  /** Maximum decoded UTF-8 bytes one files.read/write payload may carry. */
+  filesMaxTextBytes?: number
+  /** Maximum bytes one files.upload carries and one files download surface serves. */
+  filesMaxTransferBytes?: number
+  /** Maximum entries one files.list returns before the tail is dropped as truncated. */
+  filesMaxListingEntries?: number
   /**
    * Whether handing a path to the native opener can work at all — the
    * `hasDocument` capability the preset roster reports, and the switch
@@ -1108,6 +1139,9 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     ?? DEFAULT_SESSION_LOG_COMPRESSION_LEVEL
   const coldBlankProbeMaxBytes = defaults.coldBlankProbeMaxBytes
     ?? DEFAULT_COLD_BLANK_PROBE_MAX_BYTES
+  const filesMaxTextBytes = defaults.filesMaxTextBytes ?? DEFAULT_FILES_MAX_TEXT_BYTES
+  const filesMaxTransferBytes = defaults.filesMaxTransferBytes ?? DEFAULT_FILES_MAX_TRANSFER_BYTES
+  const filesMaxListingEntries = defaults.filesMaxListingEntries ?? DEFAULT_FILES_MAX_LISTING_ENTRIES
   /** The seed model each create/resume declares; re-read so it never goes stale. */
   const agentOptions = (): AgentOptions => {
     const { provider, model } = defaults.defaultModelSelection()
@@ -3257,6 +3291,61 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
     },
 
+    files: {
+      // Workspace-scoped file operations. Every method resolves the session's
+      // canonical header cwd through the fs seam and requires the requested
+      // workspace-relative path to stay under it (schema-rejected as absolute
+      // or traversing, then re-checked against symlink-resolved containment);
+      // the panel is NOT a privileged surface.
+      async list(request, signal) {
+        const { sessionId, path = '' } = request.payload
+        try {
+          const root = await workspaceRootOf(ctx, sessionId)
+          const fs = ctx.get('fs') as import('@deepseek-ai/dsh-fs').FileSystem
+          const listing = await listWorkspaceFiles(fs, root, path, filesMaxListingEntries, signal)
+          return ok(request, listing)
+        } catch (error: unknown) {
+          return err(request, filesError(error))
+        }
+      },
+
+      async read(request, signal) {
+        const { sessionId, path } = request.payload
+        try {
+          const root = await workspaceRootOf(ctx, sessionId)
+          const fs = ctx.get('fs') as import('@deepseek-ai/dsh-fs').FileSystem
+          const content = await readWorkspaceFile(fs, root, path, filesMaxTextBytes, signal)
+          return ok(request, content)
+        } catch (error: unknown) {
+          return err(request, filesError(error))
+        }
+      },
+
+      async write(request) {
+        const { sessionId, path, content } = request.payload
+        try {
+          const root = await workspaceRootOf(ctx, sessionId)
+          const fs = ctx.get('fs') as import('@deepseek-ai/dsh-fs').FileSystem
+          const receipt = await writeWorkspaceText(fs, root, path, content, filesMaxTextBytes)
+          return ok(request, receipt)
+        } catch (error: unknown) {
+          return err(request, filesError(error))
+        }
+      },
+
+      async upload(request) {
+        const { sessionId, path, data } = request.payload
+        try {
+          const root = await workspaceRootOf(ctx, sessionId)
+          const fs = ctx.get('fs') as import('@deepseek-ai/dsh-fs').FileSystem
+          const receipt = await uploadWorkspaceBytes(fs, root, path, Buffer.from(data, 'base64'), filesMaxTransferBytes)
+          return ok(request, receipt)
+        } catch (error: unknown) {
+          return err(request, filesError(error))
+        }
+      },
+    },
+
     settings: {
       describe(request) {
         const settings = ctx.get('settings')
@@ -3690,6 +3779,28 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             },
           },
         )
+      },
+
+      async workspaceFile(request, signal) {
+        // Same workspace containment as the files RPC domain: the session's
+        // canonical cwd is the root, and the workspace-relative path must stay
+        // under it. Failures answer their status directly (the browser never
+        // parses an envelope here).
+        try {
+          const root = await workspaceRootOf(ctx, request.sessionId)
+          const fs = ctx.get('fs') as import('@deepseek-ai/dsh-fs').FileSystem
+          return await downloadWorkspaceFile(fs, root, request.path, filesMaxTransferBytes, signal)
+        } catch (error: unknown) {
+          if (error instanceof WorkspaceFilesError) {
+            const status = error.code === 'file-not-found' ? 404
+              : error.code === 'file-outside-workspace' ? 403 : 500
+            return new Response(error.message, { status })
+          }
+          return new Response(
+            'workspace file download failed',
+            { status: 500 },
+          )
+        }
       },
     },
 

@@ -248,7 +248,10 @@ export class SettingsScopeBinder extends Service {
     const controller = new SettingsScopeController<T>(
       connection.api,
       spec,
-      connection.isLoopback ? 'host' : 'memory',
+      // Loopback pages and deployment-declared privileged remotes persist to
+      // the Host settings store; any other remote browser stays process-local
+      // (its settings RPCs would be refused by the privileged fence).
+      connection.isLoopback || connection.isPrivilegedRemote ? 'host' : 'memory',
     )
     ctx.effect(() => {
       const refresh = (namespace?: string): void => {

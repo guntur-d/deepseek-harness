@@ -90,6 +90,12 @@
       "path": "../../workspace/workspace"
     },
     {
+      "path": "../../fs/fs"
+    },
+    {
+      "path": "../../sandbox/sandbox"
+    },
+    {
       "path": "../directory-picker"
     },
     {

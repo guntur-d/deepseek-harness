@@ -28,6 +28,7 @@ function scriptedApi(overrides: {
   settings?: Partial<ApiProxy['settings']>
   credentials?: Partial<ApiProxy['credentials']>
   llm?: Partial<ApiProxy['llm']>
+  files?: Partial<ApiProxy['files']>
   respond?: ApiProxy['respond']
 } = {}): ApiProxy {
   async function *empty<F>(): AsyncGenerator<RpcRequest<F>> { /* no frames */ }
@@ -129,8 +130,18 @@ function scriptedApi(overrides: {
       ...overrides.llm,
     },
     events: { mux: () => empty<MuxFrame>(), host: () => empty<HostFrame>(), ...overrides.events },
+    files: {
+      list: r => ok(r, { path: '', entries: [], truncated: false }),
+      read: r => ok(r, { content: '', size: 0, truncated: false }),
+      write: r => ok(r, { operation: 'create' as const, version: 'v1', bytes: 0 }),
+      upload: r => ok(r, { operation: 'create' as const, version: 'v1', bytes: 0 }),
+      ...overrides.files,
+    },
     respond: overrides.respond ?? (() => Promise.resolve({ accepted: false as const, reason: 'not-pending' as const })),
-    downloads: { sessionLog: async () => new Response('stub', { status: 404 }) },
+    downloads: {
+      sessionLog: async () => new Response('stub', { status: 404 }),
+      workspaceFile: async () => new Response('stub', { status: 404 }),
+    },
   }
 }
 

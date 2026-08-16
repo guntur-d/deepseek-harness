@@ -538,6 +538,42 @@ export async function writeFileAtomic(
   internals: FsIoInternals = {},
   createIfAbsent?: { displayPath: string },
 ): Promise<void> {
+  return writeAtomic(absolutePath, content, mode, signal, internals, createIfAbsent)
+}
+
+/**
+ * Atomically replace a file with raw bytes (the `writeBytes` counterpart of
+ * {@link writeFileAtomic}): same staging/publication mechanics, no UTF-8
+ * encoding — the bytes pass through unchanged.
+ * @param absolutePath - destination; missing parent directories are created.
+ * @param data - the full new file content.
+ * @param mode - existing destination's POSIX mode to preserve, or `undefined` for a new file;
+ * inert as a mode on Windows but identifies replacement security semantics.
+ * @param signal - cancellation checked before final publication.
+ * @param internals - Test hook for pinning temp names and observing the staged file.
+ * @param createIfAbsent - when provided, publish with a hard-link no-replace
+ * primitive; a concurrent creator's file is preserved and this write is
+ * rejected with `FS_NOT_OBSERVED` using the supplied display path.
+ */
+export async function writeFileAtomicBytes(
+  absolutePath: string,
+  data: Uint8Array,
+  mode: number | undefined,
+  signal: AbortSignal | undefined,
+  internals: FsIoInternals = {},
+  createIfAbsent?: { displayPath: string },
+): Promise<void> {
+  return writeAtomic(absolutePath, data, mode, signal, internals, createIfAbsent)
+}
+
+async function writeAtomic(
+  absolutePath: string,
+  content: string | Uint8Array,
+  mode: number | undefined,
+  signal: AbortSignal | undefined,
+  internals: FsIoInternals = {},
+  createIfAbsent?: { displayPath: string },
+): Promise<void> {
   throwIfAborted(signal, 'write')
   const directory = dirname(absolutePath)
   await mkdir(directory, { recursive: true })
@@ -567,7 +603,11 @@ export async function writeFileAtomic(
     if (platform === 'win32' && mode !== undefined) {
       await copyFileDacl(absolutePath, tempPath)
     }
-    await handle.writeFile(content, { encoding: 'utf8', ...signal ? { signal } : {} })
+    if (typeof content === 'string') {
+      await handle.writeFile(content, { encoding: 'utf8', ...signal ? { signal } : {} })
+    } else {
+      await handle.writeFile(content, ...signal ? [{ signal }] : [])
+    }
     await handle.sync()
     await internals.inspectTemp?.({ stagingDir, tempPath })
     if (mode !== undefined) await handle.chmod(mode)

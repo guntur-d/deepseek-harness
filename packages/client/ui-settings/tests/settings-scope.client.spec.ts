@@ -408,6 +408,7 @@ describe('SettingsScopeBinder.bind', () => {
     ctx.provide('connection', {
       api: { settings: { describe: describeCall } },
       isLoopback: false,
+      isPrivilegedRemote: false,
     } as never)
     let scope!: SettingsScope<UiTestSettings>
     new TestRemote(ctx)
@@ -422,5 +423,30 @@ describe('SettingsScopeBinder.bind', () => {
     expect(scope.getSnapshot()).toMatchObject({ status: 'unavailable', mode: 'memory', writable: false })
     await fiber.dispose()
     expect(describeCall).not.toHaveBeenCalled()
+  })
+
+  it('binds a deployment-declared privileged remote in host mode', async () => {
+    const describeCall = vi.fn().mockResolvedValue(described({ preference: 'dark' }, 1))
+    const ctx = new Context()
+    ctx.provide('connection', {
+      api: { settings: { describe: describeCall } },
+      isLoopback: false,
+      isPrivilegedRemote: true,
+    } as never)
+    let scope!: SettingsScope<UiTestSettings>
+    new TestRemote(ctx)
+    await ctx.plugin(SettingsScopeBinder).await()
+    const fiber = ctx.plugin({
+      inject: ['connection', 'remote', 'settingsScope'],
+      apply: (plugin: Context) => {
+        scope = plugin.settingsScope.bind<UiTestSettings>({ namespace: 'ui-test' })
+      },
+    })
+    await fiber.await()
+    await vi.waitFor(() => { expect(describeCall).toHaveBeenCalledOnce() })
+    await vi.waitFor(() => {
+      expect(scope.getSnapshot()).toMatchObject({ value: { preference: 'dark' }, mode: 'host' })
+    })
+    await fiber.dispose()
   })
 })

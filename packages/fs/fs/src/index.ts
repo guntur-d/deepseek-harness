@@ -11,6 +11,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type {
+  FsBytesWriteOutcome,
   FsDirEntry,
   FsEditOutcome,
   FsEditRequest,
@@ -29,6 +30,7 @@ export {
   FsVersion,
 } from './types.ts'
 export type {
+  FsBytesWriteOutcome,
   FsEditOutcome,
   FsEditRequest,
   FsDirEntry,
@@ -206,6 +208,28 @@ export abstract class FileSystem extends Service {
    * @returns one entry per direct child, in stable name order.
    */
   abstract listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>
+
+  /**
+   * Atomically create or replace raw bytes with no encoding or text
+   * semantics. The mirror of {@link readBytes}: same atomic publication and
+   * guard contract as {@link writeText}, without a text diff basis (the
+   * outcome carries no `before`/`after` content — binary has no text).
+   * @param target - the resolved target to write.
+   * @param data - the full new file content, at most the consumer's chosen bound.
+   * @param expected - the write intent guarding the write; omit for unconditional.
+   * @param signal - aborts before atomic publication takes effect.
+   * @param sandboxPolicy - the per-call mode and workspace root this write
+   *   runs under; a sandboxing backend fences the write by it, the bare backend
+   *   ignores it. Omit to leave the backend its own default.
+   * @returns the outcome, including the version the write produced.
+   */
+  abstract writeBytes(
+    target: FsTarget,
+    data: Uint8Array,
+    expected?: FsWriteIntent,
+    signal?: AbortSignal,
+    sandboxPolicy?: SandboxExecutionPolicy,
+  ): Promise<FsBytesWriteOutcome>
 
   /**
    * Atomically create or replace UTF-8 text. `expected` guards intent and

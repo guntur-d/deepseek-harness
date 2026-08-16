@@ -59,6 +59,9 @@ import {
   settingsReplaceValueSchema, settingsUpdateValueSchema,
 } from '../api/settings.schema.ts'
 import {
+  filesListValueSchema, filesReadValueSchema, filesWriteValueSchema,
+} from '../api/files.schema.ts'
+import {
   credentialsDescribeValueSchema, credentialsSetValueSchema, credentialsUnsetValueSchema,
 } from '../api/credentials.schema.ts'
 import { llmDiscoverModelsValueSchema, llmModelsValueSchema, llmProvidersValueSchema } from '../api/llm.schema.ts'
@@ -162,6 +165,12 @@ export interface IApiClient {
     models(payload: RequestPayload<'llm.models'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'llm.models'>>>
     discoverModels(payload: RequestPayload<'llm.discoverModels'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'llm.discoverModels'>>>
   }
+  files: {
+    list(payload: RequestPayload<'files.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'files.list'>>>
+    read(payload: RequestPayload<'files.read'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'files.read'>>>
+    write(payload: RequestPayload<'files.write'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'files.write'>>>
+    upload(payload: RequestPayload<'files.upload'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'files.upload'>>>
+  }
   /** client-response passthrough (rpcId is a backfill of the server-request's id — never minted here). */
   respond(message: ClientResponse, signal?: AbortSignal): Promise<RpcReceipt>
 }
@@ -223,6 +232,10 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'llm.providers': llmProvidersValueSchema,
   'llm.models': llmModelsValueSchema,
   'llm.discoverModels': llmDiscoverModelsValueSchema,
+  'files.list': filesListValueSchema,
+  'files.read': filesReadValueSchema,
+  'files.write': filesWriteValueSchema,
+  'files.upload': filesWriteValueSchema,
 }
 
 /** Default timeout for bounded unary calls (rpc-compare 2026-07-19: a hung host must not leave callers pending forever). */
@@ -500,6 +513,13 @@ export abstract class AbstractApiClient implements IApiClient {
     providers: (payload, signal) => this.callUnary('llm.providers', payload, signal),
     models: (payload, signal) => this.callUnary('llm.models', payload, signal),
     discoverModels: (payload, signal) => this.callUnary('llm.discoverModels', payload, signal),
+  }
+
+  readonly files: IApiClient['files'] = {
+    list: (payload, signal) => this.callUnary('files.list', payload, signal),
+    read: (payload, signal) => this.callUnary('files.read', payload, signal),
+    write: (payload, signal) => this.callUnary('files.write', payload, signal),
+    upload: (payload, signal) => this.callUnary('files.upload', payload, signal),
   }
 
   readonly events: IApiClient['events'] = {

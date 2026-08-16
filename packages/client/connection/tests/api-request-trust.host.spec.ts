@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { assertTrustedAuthority, isTrustedApiRequest } from '../src/api-request-trust.ts'
+import { isTrustedPageAuthority } from '../src/authority.ts'
 
 function request(headers: Record<string, string | undefined>): { headers: Record<string, string | undefined> } {
   return { headers }
@@ -104,5 +105,15 @@ describe('isTrustedApiRequest', () => {
     expect(isTrustedApiRequest(request({ ...markers, host: 'bad host' }), [])).toBe(false)
     expect(isTrustedApiRequest(request({ ...markers, host: '127.0.0.999' }), [])).toBe(false)
     expect(isTrustedApiRequest(request({ ...markers, host: '128.0.0.1' }), [])).toBe(false)
+  })
+
+  it('isTrustedPageAuthority matches a page URL against declared authorities', () => {
+    expect(isTrustedPageAuthority(new URL('http://192.0.2.20:3081/'), ['192.0.2.20'])).toBe(true)
+    expect(isTrustedPageAuthority(new URL('http://192.0.2.20:3081/'), ['192.0.2.20:3081'])).toBe(true)
+    expect(isTrustedPageAuthority(new URL('http://192.0.2.20:3081/'), ['192.0.2.20:3082'])).toBe(false)
+    expect(isTrustedPageAuthority(new URL('http://192.0.2.21/'), ['192.0.2.20'])).toBe(false)
+    expect(isTrustedPageAuthority(new URL('http://app.internal:8080/'), ['app.internal:8080'])).toBe(true)
+    expect(isTrustedPageAuthority(new URL('http://app.internal:8081/'), ['app.internal:8080'])).toBe(false)
+    expect(isTrustedPageAuthority(new URL('http://192.0.2.20/'), [])).toBe(false)
   })
 })

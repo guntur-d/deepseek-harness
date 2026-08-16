@@ -69,7 +69,7 @@ export function apply(ctx: ClientContext): void {
   // locale/change re-registration wiring.
   const t = ctx.locale.bind(NS)
   const connection = ctx.get('connection') as ConnectionHandle
-  const documentController = connection.isLoopback
+  const documentController = connection.isLoopback || connection.isPrivilegedRemote
     ? new SettingsDocumentStore(connection.api)
     : undefined
   const documentInjected = documentController === undefined

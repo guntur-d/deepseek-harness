@@ -598,6 +598,101 @@ describe('writeText', () => {
   })
 })
 
+describe('writeBytes', () => {
+  it('creates a new file with the exact bytes and no decoding', async () => {
+    const target = await fs.resolve('blob.bin')
+    const data = new Uint8Array([0, 1, 2, 255, 254, 0x80])
+    const outcome = await fs.writeBytes(target, data, { kind: 'createIfAbsent' })
+    expect(outcome.operation).toBe('create')
+    expect(outcome.version).toBe(await versionOf(target))
+    expect(Buffer.from(await readFile(join(dir, 'blob.bin')))).toEqual(Buffer.from(data))
+  })
+
+  it('createIfAbsent rejects an existing file as FS_NOT_OBSERVED', async () => {
+    await writeFile(join(dir, 'a.bin'), 'old')
+    const target = await fs.resolve('a.bin')
+    await expect(fs.writeBytes(target, new Uint8Array([9]), { kind: 'createIfAbsent' }))
+      .rejects.toMatchObject({ code: 'FS_NOT_OBSERVED' })
+    expect(await readFile(join(dir, 'a.bin'), 'utf8')).toBe('old')
+  })
+
+  it('replaceIfVersion replaces at the observed version and returns the post-write version', async () => {
+    await writeFile(join(dir, 'a.bin'), 'old')
+    const target = await fs.resolve('a.bin')
+    const before = await versionOf(target)
+    const outcome = await fs.writeBytes(target, new Uint8Array([1, 2, 3]), { kind: 'replaceIfVersion', version: before })
+    expect(outcome.operation).toBe('update')
+    expect(outcome.version).toBe(await versionOf(target))
+    expect(Buffer.from(await readFile(join(dir, 'a.bin')))).toEqual(Buffer.from([1, 2, 3]))
+  })
+
+  it('replaceIfVersion rejects a stale version', async () => {
+    await writeFile(join(dir, 'a.bin'), 'v1')
+    const target = await fs.resolve('a.bin')
+    const stale = await versionOf(target)
+    await writeFile(join(dir, 'a.bin'), 'changed-externally')
+    await expect(fs.writeBytes(target, new Uint8Array([7]), { kind: 'replaceIfVersion', version: stale }))
+      .rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
+  })
+
+  it('replaceIfVersion rejects a deleted target as stale, without recreating it', async () => {
+    const path = join(dir, 'a.bin')
+    await writeFile(path, 'v1')
+    const target = await fs.resolve('a.bin')
+    const version = await versionOf(target)
+    await unlink(path)
+    await expect(fs.writeBytes(target, new Uint8Array([2]), { kind: 'replaceIfVersion', version }))
+      .rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
+    await expect(stat(path)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('honors a live non-aborted signal (bytes land)', async () => {
+    const target = await fs.resolve('signaled.bin')
+    const controller = new AbortController()
+    const data = new Uint8Array([4, 5, 6])
+    const outcome = await fs.writeBytes(target, data, undefined, controller.signal)
+    expect(outcome.operation).toBe('create')
+    expect(Buffer.from(await readFile(join(dir, 'signaled.bin')))).toEqual(Buffer.from(data))
+  })
+
+  it('rejects writing onto a directory', async () => {
+    const target = await fs.resolve('.')
+    await expect(fs.writeBytes(target, new Uint8Array([1]), { kind: 'createIfAbsent' }))
+      .rejects.toMatchObject({ code: 'FS_NOT_REGULAR_FILE' })
+  })
+
+  it('unconditionally overwrites an existing file with no expectation', async () => {
+    await writeFile(join(dir, 'a.bin'), 'old')
+    const target = await fs.resolve('a.bin')
+    const outcome = await fs.writeBytes(target, new Uint8Array([0, 255]))
+    expect(outcome.operation).toBe('update')
+    expect(Buffer.from(await readFile(join(dir, 'a.bin')))).toEqual(Buffer.from([0, 255]))
+  })
+
+  it('honors a pre-aborted signal without creating the file', async () => {
+    const target = await fs.resolve('aborted.bin')
+    await expect(fs.writeBytes(target, new Uint8Array([1]), undefined, AbortSignal.abort()))
+      .rejects.toMatchObject({ code: 'FS_ABORTED' })
+    await expect(stat(join(dir, 'aborted.bin'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(lockCount(fs)).toBe(0)
+  })
+
+  it('two concurrent guarded writes: one updates, the other is rejected as stale', async () => {
+    await writeFile(join(dir, 'a.bin'), 'base')
+    const target = await fs.resolve('a.bin')
+    const version = await versionOf(target)
+    const results = await Promise.allSettled([
+      fs.writeBytes(target, new Uint8Array([1]), { kind: 'replaceIfVersion', version }),
+      fs.writeBytes(target, new Uint8Array([2]), { kind: 'replaceIfVersion', version }),
+    ])
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1)
+    const rejected = results.filter(r => r.status === 'rejected')
+    expect(rejected).toHaveLength(1)
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ code: 'FS_STALE_VERSION' })
+    expect(lockCount(fs)).toBe(0)
+  })
+})
+
 describe('editText', () => {
   it('applies a literal edit at the matching version', async () => {
     await writeFile(join(dir, 'a.txt'), 'hello world')

@@ -16,7 +16,13 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type { ApiProxy } from './api/index.ts'
-import { createApiProxy, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES } from './api-proxy.ts'
+import {
+  createApiProxy,
+  DEFAULT_COLD_BLANK_PROBE_MAX_BYTES,
+  DEFAULT_FILES_MAX_LISTING_ENTRIES,
+  DEFAULT_FILES_MAX_TEXT_BYTES,
+  DEFAULT_FILES_MAX_TRANSFER_BYTES,
+} from './api-proxy.ts'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
   type SessionLogCompressionLevel,
@@ -59,6 +65,24 @@ export interface Config {
    * @default 1024
    */
   coldBlankProbeMaxBytes?: number
+  /**
+   * Maximum decoded text bytes `files.read` returns; a larger file reports its
+   * leading code-point-aligned prefix with `truncated: true`, and
+   * `files.write` refuses content above the bound.
+   * @default 1048576
+   */
+  filesMaxTextBytes?: number
+  /**
+   * Maximum decoded bytes `files.upload` accepts (base64 over the JSON
+   * envelope) and `files.download` streams.
+   * @default 67108864
+   */
+  filesMaxTransferBytes?: number
+  /**
+   * Maximum entries one `files.list` page returns before `truncated: true`.
+   * @default 2000
+   */
+  filesMaxListingEntries?: number
 }
 
 /**
@@ -77,6 +101,9 @@ export class ApiProxyService extends Service implements ApiProxy {
     sessionExportCompressionLevel: z.number().step(1).min(0).max(9)
       .default(DEFAULT_SESSION_LOG_COMPRESSION_LEVEL) as z<SessionLogCompressionLevel>,
     coldBlankProbeMaxBytes: z.natural().default(DEFAULT_COLD_BLANK_PROBE_MAX_BYTES),
+    filesMaxTextBytes: z.natural().default(DEFAULT_FILES_MAX_TEXT_BYTES),
+    filesMaxTransferBytes: z.natural().default(DEFAULT_FILES_MAX_TRANSFER_BYTES),
+    filesMaxListingEntries: z.natural().default(DEFAULT_FILES_MAX_LISTING_ENTRIES),
   })
 
   readonly sessions: ApiProxy['sessions']
@@ -89,6 +116,7 @@ export class ApiProxyService extends Service implements ApiProxy {
   readonly settings: ApiProxy['settings']
   readonly credentials: ApiProxy['credentials']
   readonly llm: ApiProxy['llm']
+  readonly files: ApiProxy['files']
   readonly events: ApiProxy['events']
   readonly downloads: ApiProxy['downloads']
   readonly respond: ApiProxy['respond']
@@ -106,6 +134,15 @@ export class ApiProxyService extends Service implements ApiProxy {
       ...(config.coldBlankProbeMaxBytes === undefined
         ? {}
         : { coldBlankProbeMaxBytes: config.coldBlankProbeMaxBytes }),
+      ...(config.filesMaxTextBytes === undefined
+        ? {}
+        : { filesMaxTextBytes: config.filesMaxTextBytes }),
+      ...(config.filesMaxTransferBytes === undefined
+        ? {}
+        : { filesMaxTransferBytes: config.filesMaxTransferBytes }),
+      ...(config.filesMaxListingEntries === undefined
+        ? {}
+        : { filesMaxListingEntries: config.filesMaxListingEntries }),
     })
     this.sessions = api.sessions
     this.subagents = api.subagents
@@ -117,6 +154,7 @@ export class ApiProxyService extends Service implements ApiProxy {
     this.settings = api.settings
     this.credentials = api.credentials
     this.llm = api.llm
+    this.files = api.files
     this.events = api.events
     this.downloads = api.downloads
     // createApiProxy returns closures (no `this` capture), so the bind is

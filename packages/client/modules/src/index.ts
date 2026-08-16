@@ -28,6 +28,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
+import { interpolate } from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { WebBootEntry, WebBootGraph } from './client/manifest.ts'
@@ -147,13 +148,22 @@ function shortHash(input: string | Buffer): string {
 }
 
 /** Graph row for one bundle rev (url carries the rev as its cache-busting query). */
-function graphRow(id: string, rev: string, injectEdges: string[] | undefined, immediately: boolean): WebBootEntry {
+function graphRow(
+  id: string,
+  rev: string,
+  injectEdges: string[] | undefined,
+  immediately: boolean,
+  config: unknown,
+): WebBootEntry {
   return {
     id,
     url: `/plugins/${id}/client.js?rev=${rev}`,
     rev,
     ...(injectEdges !== undefined ? { inject: injectEdges } : {}),
     ...(immediately ? { immediately: true } : {}),
+    // The evaluated entry config (the loader already resolved any `!!js`
+    // expressions); the browser side applies it to the plugin's Config.
+    ...(config === undefined ? {} : { config }),
   }
 }
 
@@ -276,7 +286,7 @@ export class ClientModuleRegistry extends Service {
     if (record === undefined) return undefined
     const rev = shortHash(readFileSync(record.clientPath))
     if (rev === record.entry.rev) return rev
-    record.entry = graphRow(id, rev, record.entry.inject, record.entry.immediately === true)
+    record.entry = graphRow(id, rev, record.entry.inject, record.entry.immediately === true, record.entry.config)
     this.composed = this.compose()
     for (const notify of this.rebuildListeners) {
       // Containment: rebuilt() runs inside the HMR watch callback — a
@@ -396,8 +406,42 @@ export class ClientModuleRegistry extends Service {
     // The rev rides the row from here on: a fiber restart reuses the row (and
     // its rev) untouched; only rebuilt() re-reads the bundle.
     const rev = this.initialBundleRevision(entryName, meta.clientPath)
-    this.table.set(entryName, { entry: graphRow(entryName, rev, meta.inject, meta.immediately), clientPath: meta.clientPath })
+    const entryConfig = this.configOf(entryName)
+    this.table.set(entryName, {
+      entry: graphRow(entryName, rev, meta.inject, meta.immediately, entryConfig),
+      clientPath: meta.clientPath,
+    })
     return true
+  }
+
+  /**
+   * Read one loader entry's evaluated config for the boot graph.
+   * @param entryName - the loader entry name (== package name).
+   * @returns the entry's config with any `!!js` expressions resolved against
+   * this host ctx, or undefined when the row carries none (or its referenced
+   * services are not provided yet — the entry's own activation stays the
+   * fail-loud authority, and a later recompose picks the config up).
+   */
+  private configOf(entryName: string): unknown {
+    for (const entry of this.ctx.loader.entries()) {
+      if (entry.options.name !== entryName) continue
+      const config = entry.options.config
+      if (config === undefined) return undefined
+      // Entry options hold the raw config tree; expressions are evaluated
+      // per fiber at activation, so resolve them here — the browser must
+      // receive values, never expression nodes. The expression scope routes
+      // property access through the global service store (the fiber inject
+      // fence would refuse a property this fiber never declared).
+      try {
+        return interpolate(serviceScope(this.ctx), config)
+      } catch {
+        // A sibling provider the expression names is still activating; the
+        // entry-level evaluation (with its own inject) will fail loud if the
+        // reference is genuinely broken, and the activation flush recomposes.
+        return undefined
+      }
+    }
+    return undefined
   }
 
   private flush(onError: (err: Error) => void): void {
@@ -458,3 +502,24 @@ export class ClientModuleRegistry extends Service {
 }
 
 export default ClientModuleRegistry
+
+/**
+ * A property scope for loader `!!js` expressions that reads every service by
+ * name through the reflect store — expressions reference services the way
+ * any composed row may, without depending on one fiber's inject declaration.
+ * @param ctx - the host context whose service store the scope reads.
+ * @returns the scope proxy.
+ */
+function serviceScope(ctx: Context): object {
+  return new Proxy(ctx, {
+    get(target, prop) {
+      if (typeof prop === 'string') {
+        // Non-strict: the boot graph composes while sibling fibers are still
+        // activating, and a strict read refuses their not-yet-active providers.
+        const service = target.reflect.get(prop, false)
+        if (service !== undefined) return service
+      }
+      return Reflect.get(target, prop)
+    },
+  })
+}

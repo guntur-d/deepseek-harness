@@ -283,6 +283,11 @@
     - id: ui-trajectory
       name: '@deepseek-ai/dsh-client-ui-trajectory'
 
+    # Workspace-scoped Files panel: a conversation view tab browsing the
+    # active session's cwd (list/read/write/upload + the download surface).
+    - id: ui-files
+      name: '@deepseek-ai/dsh-client-ui-files'
+
 # ── the agent plane moves behind agent presets ─────────────────────────────
 #
 # Every row below composes what ONE agent contributes to the host registries:

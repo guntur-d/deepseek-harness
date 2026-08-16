@@ -80,6 +80,12 @@ describe('read-only', () => {
     expect(await readFile(path, 'utf8')).toBe('original')
   })
 
+  it('denies a raw-bytes write, leaving no file on disk', async () => {
+    const path = join(workspace, 'denied.bin')
+    await expect(fs.writeBytes(await target(path), new Uint8Array([1, 2]))).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    expect(existsSync(path)).toBe(false)
+  })
+
   it('allows reads (every mode permits reading)', async () => {
     const path = join(workspace, 'readable.txt')
     await writeFile(path, 'hello')
@@ -106,6 +112,12 @@ describe('workspace-write containment', () => {
   it('an absolute path outside the workspace is denied, no file created', async () => {
     const path = join(outside, 'escape.txt')
     await expect(fs.writeText(await target(path), 'x')).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    expect(existsSync(path)).toBe(false)
+  })
+
+  it('a raw-bytes write outside the workspace is denied, no file created', async () => {
+    const path = join(outside, 'escape.bin')
+    await expect(fs.writeBytes(await target(path), new Uint8Array([1]))).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
     expect(existsSync(path)).toBe(false)
   })
 
@@ -211,6 +223,14 @@ describe('the per-call policy override (escalation)', () => {
     const path = join(outside, 'granted-full.txt')
     await fs.writeText(await target(path), 'full', undefined, undefined, { mode: 'danger-full-access', workspaceRoot: workspace })
     expect(await readFile(path, 'utf8')).toBe('full')
+  })
+
+  it('a workspace-write stamp lets a contained raw-bytes write land for that call only', async () => {
+    await boot('read-only')
+    const path = join(workspace, 'escalated.bin')
+    const data = new Uint8Array([0, 255])
+    await fs.writeBytes(await target(path), data, undefined, undefined, { mode: 'workspace-write', workspaceRoot: workspace })
+    expect(Buffer.from(await readFile(path))).toEqual(Buffer.from(data))
   })
 })
 
