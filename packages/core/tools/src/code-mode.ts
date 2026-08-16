@@ -304,9 +304,10 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
     description: TYPESCRIPT_FLAVOR.description,
     parameters: {
       code: { type: 'string', required: true, description: TYPESCRIPT_FLAVOR.codeDescription },
+      // Optional: a UI label. Models occasionally omit it; the call still runs
+      // with a fallback title instead of failing the turn on a presentation field.
       description: {
         type: 'string',
-        required: true,
         description: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION,
       },
     },
@@ -326,7 +327,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
       },
     },
     async execute(args, exec): Promise<RunCodeOutput> {
-      if (args.description.trim().length === 0) {
+      if (args.description !== undefined && args.description.trim().length === 0) {
         throw new Error('invalid description: expected a non-empty string')
       }
       const runtime = requireRuntime()
@@ -644,7 +645,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
     // (the bash `description` precedent); the program itself rides rawInput.
     presentCall: args => ({
       card: 'generic',
-      title: args.description,
+      title: args.description?.trim() || 'Run code',
       kind: 'execute',
       rawInput: args.code,
     }),
