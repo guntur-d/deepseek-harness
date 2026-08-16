@@ -74,7 +74,7 @@ function fakeResponse(): { response: ServerResponse; state: { status?: number; b
   return { response, state }
 }
 
-async function mounted(config?: { trustedHosts?: string[] }): Promise<{
+async function mounted(config?: { trustedHosts?: string[]; privilegedHosts?: string[] }): Promise<{
   routes: WebRoute[]
   upgrades: WebUpgradeRoute[]
   dispose: () => Promise<void>
@@ -189,6 +189,34 @@ describe('connection node half', () => {
     const read = fakeResponse()
     await routes[0]!.handler(fakeRequest({ host: 'harness.example' }), read.response)
     expect(read.state.status).not.toBe(403)
+    await dispose()
+  })
+
+  it('serves privileged methods to an authority declared in privilegedHosts', async () => {
+    const { routes, dispose } = await mounted({
+      trustedHosts: ['harness.example', 'lab.example'],
+      privilegedHosts: ['harness.example'],
+    })
+    // A declared privileged authority reaches the privileged plane: the empty
+    // apiProxy answers a carrier-level 404, never the fence's 403.
+    for (const method of [
+      'host.pickDirectory', 'host.openPath',
+      'settings.describe', 'settings.update', 'settings.mutate',
+      'credentials.describe', 'credentials.set',
+      'llm.discoverModels',
+      'agentPreset.read', 'agentPreset.copy', 'agentPreset.remove',
+    ]) {
+      const allowed = fakeResponse()
+      await routes[0]!.handler(
+        fakeRequest({ host: 'harness.example' }, `${API_PATH}/${method}`),
+        allowed.response,
+      )
+      expect(allowed.state.status).not.toBe(403)
+    }
+    // A trusted authority that is NOT declared privileged stays pinned to loopback.
+    const pinned = fakeResponse()
+    await routes[0]!.handler(fakeRequest({ host: 'lab.example' }, `${API_PATH}/settings.describe`), pinned.response)
+    expect(pinned.state.status).toBe(403)
     await dispose()
   })
 

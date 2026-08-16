@@ -115,6 +115,28 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
+  it('mints draft attachment ids without secure-context crypto.randomUUID', async () => {
+    const randomUUID = vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => {
+      throw new Error('crypto.randomUUID must not be used on insecure origins')
+    })
+    try {
+      const b = await bench()
+      const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:draft')
+      try {
+        const [attachment] = b.root.createDraftImages([
+          new File([new Uint8Array(4)], 'a.png', { type: 'image/png' }),
+        ])
+        expect(attachment?.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+        expect(randomUUID).not.toHaveBeenCalled()
+      } finally {
+        created.mockRestore()
+      }
+      await b.runtime.dispose()
+    } finally {
+      randomUUID.mockRestore()
+    }
+  })
+
   it('invalidates pending historical image loads when the rendered session is released', async () => {
     const read = Promise.withResolvers<Awaited<ReturnType<SessionFace['readAttachment']>>>()
     const b = await bench(() => read.promise)

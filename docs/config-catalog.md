@@ -405,6 +405,16 @@ export interface ConnectionConfig {
    * that is not a bare, canonical authority fails the plugin load.
    */
   trustedHosts?: string[]
+  /**
+   * Authorities that may also reach the privileged method plane (settings,
+   * credentials, agent presets, native dialogs, model discovery). Without an
+   * explicit value the plane stays loopback-only: `trustedHosts` is a
+   * DNS-rebinding fence, not authentication, so the configuration and secret
+   * plane opens to the network only when the operator names its authorities
+   * separately. An entry that is not a bare, canonical authority fails the
+   * plugin load.
+   */
+  privilegedHosts?: string[]
   /** Maximum buffered JSON body for every `/api` request. */
   maxRequestBodyBytes?: number
 }
@@ -792,8 +802,14 @@ Source: [`packages/host/frontend-static/src/index.ts:28`](../packages/host/front
 ```ts config-catalog
 /** Gateway config: the listen address. */
 export interface Config {
-  /** Listen host; the two supported values are loopback and all-interfaces. */
-  host: '127.0.0.1' | '0.0.0.0'
+  /**
+   * Listen host: loopback, all-interfaces, or one specific bind address
+   * (IP literal or hostname). A specific address binds only that interface;
+   * `0.0.0.0` binds every IPv4 interface and is the deliberate network-exposure
+   * posture the CLI refuses. The browser-trust fence, not this schema, decides
+   * which authorities may drive the API.
+   */
+  host: string
   /** Listen port; zero requests an OS-assigned port. */
   port: number
 }
@@ -2884,6 +2900,13 @@ export interface Config {
   surfaceContext: boolean
   /** Explicit `--trusted-host` authorities from this invocation. */
   trustedHosts: string[]
+  /**
+   * `--allow-privileged-remote`: serve the privileged method plane (settings,
+   * credentials, agent presets, native dialogs) to the trusted authorities
+   * too. Without it the plane stays loopback-only, however far the /api fence
+   * extends.
+   */
+  allowPrivilegedRemote: boolean
 }
 ```
 

@@ -61,7 +61,7 @@ dsh web --dump-config
 dsh web --help
 ```
 
-The production Web runner needs built package and frontend artifacts (`pnpm run build`). It serves `http://127.0.0.1:3080` by default. The CLI intentionally does not support `--host 0.0.0.0` yet and exits with a usage error; `--trusted-host` adds named authorities accepted by the `/api` browser-trust fence.
+The production Web runner needs built package and frontend artifacts (`pnpm run build`). It serves `http://127.0.0.1:3080` by default. The CLI intentionally does not support the wildcard bind hosts `--host 0.0.0.0` and `--host ::` yet and exits with a usage error. A specific non-loopback bind is an explicit opt-in: `dsh web --host 192.168.1.102 --trusted-host 192.168.1.102` binds only that interface and lets the `/api` browser-trust fence accept the same authority; `--trusted-host` adds named authorities the fence accepts (host or `host:port`, repeatable). The settings, credentials, and agent-preset plane stays loopback-only unless `--allow-privileged-remote` (which requires `--trusted-host`) opens it to the same authorities.
 
 Process shutdown gives the plugin tree up to five seconds to dispose. The first `SIGINT`/`SIGTERM` starts that graceful drain — `SIGTERM` is a supervisor's ordinary stop request and exits 0 on every surface, `SIGINT` reports 130; a second signal forces immediate exit. If one-shot normal completion is already stuck in disposal, the first `Ctrl+C` is the escalation and exits immediately instead of being swallowed.
 

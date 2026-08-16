@@ -60,6 +60,9 @@
       "path": "../../goal/goal"
     },
     {
+      "path": "../../host/apiproxy"
+    },
+    {
       "path": "../../todo/tool-todo"
     },
     {
