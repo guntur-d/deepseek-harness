@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { runNativeCommand } from '@deepseek-ai/dsh-native-command'
+import { runNativeCommand, spawnNativeCommand } from '@deepseek-ai/dsh-native-command'
 
 const node = process.execPath
 
@@ -35,6 +35,37 @@ describe('runNativeCommand', () => {
   it('terminates the child when the signal aborts', async () => {
     const abort = new AbortController()
     const pending = runNativeCommand(node, ['-e', 'setTimeout(() => {}, 60_000)'], abort.signal)
+    abort.abort()
+    const failure = await pending.then(() => { throw new Error('unexpected resolve') }, (error: unknown) => error)
+    expect(failure).toBeInstanceOf(Error)
+    expect((failure as { code?: unknown }).code).toBe('ABORT_ERR')
+  })
+})
+
+describe('spawnNativeCommand', () => {
+  it('settles on the spawn without waiting for the child to exit', async () => {
+    const started = Date.now()
+    const result = await spawnNativeCommand(
+      node,
+      ['-e', 'setTimeout(() => {}, 60_000)'],
+      new AbortController().signal,
+    )
+    expect(result).toEqual({ stdout: '', stderr: '' })
+    expect(Date.now() - started).toBeLessThan(5_000)
+  })
+
+  it('rejects a missing executable with the spawn ENOENT error', async () => {
+    const failure = await spawnNativeCommand(
+      '/definitely/missing/executable',
+      [],
+      new AbortController().signal,
+    ).then(() => { throw new Error('unexpected resolve') }, (error: unknown) => error)
+    expect(failure).toBeInstanceOf(Error)
+  })
+
+  it('terminates the detached child when the signal aborts', async () => {
+    const abort = new AbortController()
+    const pending = spawnNativeCommand(node, ['-e', 'setTimeout(() => {}, 60_000)'], abort.signal)
     abort.abort()
     const failure = await pending.then(() => { throw new Error('unexpected resolve') }, (error: unknown) => error)
     expect(failure).toBeInstanceOf(Error)

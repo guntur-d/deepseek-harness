@@ -9,11 +9,20 @@ type ExecFileMock = (
   options: { encoding: string; signal: AbortSignal; windowsHide: boolean },
   callback: ExecFileCallback,
 ) => void
+type SpawnMock = (
+  command: string,
+  args: readonly string[],
+  options: { detached: boolean; stdio: string; signal: AbortSignal; windowsHide: boolean },
+) => EventEmitter
 
-const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn<ExecFileMock>() }))
+const { execFileMock, spawnMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn<ExecFileMock>(),
+  spawnMock: vi.fn<SpawnMock>(),
+}))
 
-vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+vi.mock('node:child_process', () => ({ execFile: execFileMock, spawn: spawnMock }))
 
+import { EventEmitter } from 'node:events'
 import { release as osRelease } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
 import { canOpenNativePath, openNativePath, openNativeTextFile, type PathOpenerRunner } from '../src/native-path-opener.ts'
@@ -145,26 +154,27 @@ describe('native path opener', () => {
     expect(run.mock.calls[0]?.[0]).toBe(ambientWsl ? 'wslpath' : 'xdg-open')
   })
 
-  it('runs the default command adapter without a shell and preserves command failures', async () => {
-    execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
-      callback(null, '', '')
+  it('runs the default command adapter without a shell, settles on spawn, and preserves spawn failures', async () => {
+    const child = new EventEmitter()
+    spawnMock.mockImplementationOnce(() => {
+      queueMicrotask(() => { child.emit('spawn') })
+      return child
     })
     await openNativePath('/tmp/default.txt', signal(), { platform: 'darwin' })
-    const [command, args, options] = execFileMock.mock.calls[0]!
+    const [command, args, options] = spawnMock.mock.calls[0]!
     expect(command).toBe('open')
     expect(args).toEqual(['/tmp/default.txt'])
-    expect(options.encoding).toBe('utf8')
+    expect(options.detached).toBe(true)
+    expect(options.stdio).toBe('ignore')
     expect(options.windowsHide).toBe(true)
     expect(options.signal).toBeInstanceOf(AbortSignal)
 
     const commandError = Object.assign(new Error('open failed'), { code: 1 })
-    execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
-      callback(commandError, 'partial output', 'failure details')
+    spawnMock.mockImplementationOnce(() => {
+      queueMicrotask(() => { child.emit('error', commandError) })
+      return child
     })
-    await expect(openNativePath('/tmp/missing.txt', signal(), { platform: 'darwin' })).rejects.toMatchObject({
-      message: 'open failed', cause: commandError, code: 1,
-      stdout: 'partial output', stderr: 'failure details',
-    })
+    await expect(openNativePath('/tmp/missing.txt', signal(), { platform: 'darwin' })).rejects.toBe(commandError)
   })
 })
 

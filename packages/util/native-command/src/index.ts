@@ -1,12 +1,12 @@
 /**
- * Shared no-shell `execFile` runner for host-native OS integrations (the
+ * Shared no-shell `execFile` runners for host-native OS integrations (the
  * native directory chooser, the open-with-default-application hand-off):
  * utf8 stdio capture, abort propagation, Windows console hide. A library,
  * not a plugin — no ctx, no state, no events.
  * @module @deepseek-ai/dsh-native-command
  */
 
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 
 /** Testable command boundary; native implementations never invoke a shell. */
 export type NativeCommandRunner = (
@@ -41,4 +41,27 @@ export const runNativeCommand: NativeCommandRunner = (command, args, signal) =>
         resolve({ stdout, stderr })
       },
     )
+  })
+
+/**
+ * Launch a host command without waiting on it: detached, stdio ignored, and
+ * the promise settles on the spawn itself. The open-with-default-application
+ * hand-off must not block the caller for the opened application's lifetime —
+ * `execFile` would hold the RPC open until the app closes its inherited
+ * pipes. Abort still terminates the detached child.
+ * @param command - executable path or PATH name.
+ * @param args - argv (never a shell string).
+ * @param signal - caller/connection lifetime; abort terminates the child.
+ * @returns settlement once the child process has spawned.
+ */
+export const spawnNativeCommand: NativeCommandRunner = (command, args, signal) =>
+  new Promise((resolve, reject) => {
+    const child = spawn(command, [...args], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+      signal,
+    })
+    child.once('error', reject)
+    child.once('spawn', () => { resolve({ stdout: '', stderr: '' }) })
   })

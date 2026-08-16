@@ -10,7 +10,7 @@
 
 import { release as osRelease } from 'node:os'
 import { extname } from 'node:path'
-import { runNativeCommand, type NativeCommandRunner } from '@deepseek-ai/dsh-native-command'
+import { spawnNativeCommand, type NativeCommandRunner } from '@deepseek-ai/dsh-native-command'
 
 /** Testable command boundary; native implementations never invoke a shell. */
 export type PathOpenerRunner = NativeCommandRunner
@@ -123,7 +123,9 @@ async function openNativePathWithIntent(
   internals: PathOpenerInternals = {},
 ): Promise<void> {
   const platform = internals.platform ?? process.platform
-  const run = internals.run ?? runNativeCommand
+  // The open hand-off never waits on the launched application: a runner that
+  // captures stdio would hold the RPC open until the app closes its pipes.
+  const run = internals.run ?? spawnNativeCommand
   const env = internals.env ?? process.env
   const wsl = platform === 'linux' && isWsl(internals)
 
