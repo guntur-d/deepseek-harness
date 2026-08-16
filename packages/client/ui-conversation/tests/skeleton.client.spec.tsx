@@ -348,7 +348,7 @@ describe('ConversationRoot resident composer', () => {
     expect(seat?.contains(fallback)).toBe(true)
   })
 
-  it('hero phase: same textarea, hero chrome, no header, picker switches the workspace', () => {
+  it('hero phase: same textarea, hero chrome, view tabs, no chat view, picker switches the workspace', () => {
     const b = mount(
       conversationSnapshot({ composerPhase: 'blank', blank: true }),
       [
@@ -361,7 +361,11 @@ describe('ConversationRoot resident composer', () => {
     const host = b.view.container.querySelector('[data-conversation-scroll]')
     const header = b.view.container.querySelector('header')
     expect(host).not.toBeNull()
-    expect(header?.getAttribute('aria-hidden')).toBe('true')
+    // The header mounts with its tab strip (Files stays reachable before the
+    // first message) but without the title row or aria-hidden shell.
+    expect(header?.getAttribute('aria-hidden')).toBeNull()
+    expect(header?.querySelector('.tabs') ?? header?.querySelector('[role="tablist"]')).not.toBeNull()
+    expect(b.view.getByRole('tab', { name: 'Trajectory' })).toBeTruthy()
     expect(b.view.getByText('探索未至之境')).toBeTruthy()
     expect(b.view.getByText('预览版')).toBeTruthy()
     expect(b.view.queryByTestId('view-chat')).toBeNull()
@@ -380,6 +384,30 @@ describe('ConversationRoot resident composer', () => {
     act(() => { owner.onPick(wid('second')) })
     expect(b.retargetWorkspace).toHaveBeenCalledWith(wid('second'))
     expect(b.view.getByText('Selected Folder')).toBeTruthy()
+  })
+
+  it('hero phase: a selected non-chat view renders its area before the first message', () => {
+    const b = mount(
+      conversationSnapshot({ composerPhase: 'blank', blank: true }),
+      undefined,
+      undefined,
+      { viewTabs: [
+        { id: 'chat', label: 'Chat' },
+        { id: 'files', label: 'Files' },
+      ] },
+    )
+    act(() => { b.chat.actions.setView('files') })
+    const header = b.view.container.querySelector('header')
+    expect(header?.getAttribute('aria-hidden')).toBeNull()
+    expect(b.view.getByRole('tab', { name: 'Files' })).toBeTruthy()
+    expect(b.view.getByRole('tab', { name: 'Files' }).getAttribute('aria-selected')).toBe('true')
+    // The non-chat view area renders into the scrollport although the session
+    // has no history yet; the default Chat view stays on the hero.
+    expect(b.view.queryByTestId('view-files')).not.toBeNull()
+    expect(b.view.queryByTestId('view-chat')).toBeNull()
+    // Switching back to Chat restores the hero-only posture.
+    act(() => { b.chat.actions.setView('chat') })
+    expect(b.view.queryByTestId('view-files')).toBeNull()
   })
 
   it('settling phase: a summary that does not prove the session blank hides the composer while it opens', () => {

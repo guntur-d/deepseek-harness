@@ -70,11 +70,16 @@ export function ConversationSessionHeader({
   const composerPhase = useSession(s => s.composerPhase)
   const blank = useSession(s => s.blank)
   const hideChrome = blank && composerPhase === 'blank'
+  const showTabs = tabs.length > 1
+  // A blank session still exposes the view tabs (so the user can reach the
+  // Files panel before the first message); only a session without tabs keeps
+  // the whole header hidden.
+  const hideHeader = hideChrome && !showTabs
 
   return (
     <header
-      className={clsx(css.header, hideChrome && css.headerHidden)}
-      aria-hidden={hideChrome || undefined}
+      className={clsx(css.header, hideHeader && css.headerHidden)}
+      aria-hidden={hideHeader || undefined}
     >
       {!hideChrome && (
         <>
@@ -107,24 +112,24 @@ export function ConversationSessionHeader({
               {renderSlot('conversation.session.header.utilities', {})}
             </div>
           </div>
-          {tabs.length > 1 && (
-            <div className={css.tabs} role="tablist">
-              {tabs.map(viewTab => (
-                <button
-                  key={viewTab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={viewTab.id === active?.id}
-                  className={clsx(css.tab, viewTab.id === active?.id && css.tabActive)}
-                  onClick={() => { actions.setView(viewTab.id) }}
-                >
-                  {viewTab.label}
-                </button>
-              ))}
-            </div>
-          )}
         </>
       )}
+      {showTabs && (
+        <div className={css.tabs} role="tablist">
+            {tabs.map(viewTab => (
+              <button
+                key={viewTab.id}
+                type="button"
+                role="tab"
+                aria-selected={viewTab.id === active?.id}
+                className={clsx(css.tab, viewTab.id === active?.id && css.tabActive)}
+                onClick={() => { actions.setView(viewTab.id) }}
+              >
+                {viewTab.label}
+              </button>
+            ))}
+          </div>
+        )}
     </header>
   )
 }
@@ -133,7 +138,8 @@ export function ConversationSessionHeader({
  * Renders the active Session view inside the resident scrollport and keeps
  * the input draft mirrored while blank Hero chrome is visible.
  * @param props - Strict Session input/store, view ledger, and render shares.
- * @returns the active view area, or null while the Session remains blank.
+ * @returns the active view area, or null while the Session remains blank and
+ * the default Chat view is selected.
  */
 export function ConversationSession({
   sessionId, useSession, useInput, inputActions, useStore, actions,
@@ -162,7 +168,11 @@ export function ConversationSession({
     releaseSessionImages(sessionId)
   }, [releaseSessionImages, sessionId])
 
-  if (blank && composerPhase === 'blank') return null
+  // The blank hero owns the default Chat view (no per-session history yet);
+  // any other selected view (the Files panel) renders its area even before
+  // the first message, so the user can browse or download without a model
+  // round.
+  if (blank && composerPhase === 'blank' && (active === undefined || active.id === DEFAULT_VIEW_ID)) return null
   return (
     <div className={css.viewArea}>
       {active !== undefined && renderSlot('conversation.view', {
