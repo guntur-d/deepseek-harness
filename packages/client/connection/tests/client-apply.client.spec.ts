@@ -87,7 +87,7 @@ describe('connection client apply', () => {
   it('flags a page on a deployment-declared privileged authority', async () => {
     ;(globalThis as Win).location = { hostname: '192.0.2.20', search: '', href: 'http://192.0.2.20:3081/' }
     const ctx = new Context()
-    await ctx.plugin({ apply, inject: [] }, { privilegedHosts: ['192.0.2.20'] } as never)
+    await ctx.plugin({ apply, inject: [] }, { privilegedHosts: ['192.0.2.20'] })
     const handle = ctx.get('connection') as ConnectionHandle
     expect(handle.isLoopback).toBe(false)
     expect(handle.isPrivilegedRemote).toBe(true)
@@ -96,7 +96,7 @@ describe('connection client apply', () => {
   it('derives the authority from the hostname when the page stub lacks href', async () => {
     ;(globalThis as Win).location = { hostname: '192.0.2.20', search: '', href: '' }
     const ctx = new Context()
-    await ctx.plugin({ apply, inject: [] }, { privilegedHosts: ['192.0.2.20'] } as never)
+    await ctx.plugin({ apply, inject: [] }, { privilegedHosts: ['192.0.2.20'] })
     const handle = ctx.get('connection') as ConnectionHandle
     expect(handle.isPrivilegedRemote).toBe(true)
   })

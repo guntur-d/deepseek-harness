@@ -425,7 +425,7 @@ export class ClientModuleRegistry extends Service {
   private configOf(entryName: string): unknown {
     for (const entry of this.ctx.loader.entries()) {
       if (entry.options.name !== entryName) continue
-      const config = entry.options.config
+      const config: unknown = entry.options.config
       if (config === undefined) return undefined
       // Entry options hold the raw config tree; expressions are evaluated
       // per fiber at activation, so resolve them here — the browser must
@@ -516,10 +516,12 @@ function serviceScope(ctx: Context): object {
       if (typeof prop === 'string') {
         // Non-strict: the boot graph composes while sibling fibers are still
         // activating, and a strict read refuses their not-yet-active providers.
-        const service = target.reflect.get(prop, false)
+        const service: unknown = target.reflect.get(prop, false)
         if (service !== undefined) return service
       }
-      return Reflect.get(target, prop)
+      // The property fallback (context methods, symbols) is outside the
+      // service scope; the reflect store already answered known services.
+      return Reflect.get(target, prop) as unknown
     },
   })
 }

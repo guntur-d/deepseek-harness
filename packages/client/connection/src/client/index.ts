@@ -113,13 +113,14 @@ export function apply(ctx: Context, config?: BrowserConnectionConfig): void {
   const api: IApiClient = fixtureClient ?? new WebApiClient()
   const rpc = fixtureClient?.rpc ?? createWebConnectionRpc()
   const privileged = config?.privilegedHosts ?? []
+  // The real page always carries href; minimal stubs only name a hostname.
+  const pageHref = (pageLocation as { href?: string } | undefined)?.href
   const isPrivilegedRemote = pageLocation === undefined
     ? false
     : isTrustedPageAuthority(
-      // The real page always carries href; minimal stubs only name a hostname.
-      pageLocation.href === undefined || pageLocation.href === ''
+      pageHref === undefined || pageHref === ''
         ? new URL(`http://${pageLocation.hostname}`)
-        : new URL(pageLocation.href),
+        : new URL(pageHref),
       privileged,
     )
   let started = false
