@@ -8,7 +8,10 @@
  * @module
  */
 
-/** Normalized URL of a Host-header authority (hostname lowercased, default port stripped, IPv6 bracketed), or undefined when unparsable. */
+/** Normalized URL of a Host-header authority (hostname lowercased, default port stripped, IPv6 bracketed), or undefined when unparsable.
+ * @param authority - the raw authority string (`host` or `host:port`).
+ * @returns the parsed URL, or undefined when WHATWG parsing fails.
+ */
 export function parseAuthority(authority: string): URL | undefined {
   try {
     // http: is a WHATWG "special scheme": parsing yields a non-empty hostname or throws.
@@ -24,6 +27,9 @@ export function parseAuthority(authority: string): URL | undefined {
  * schemes (their default ports differ, so `:80` and `:443` still count as
  * explicit), never from the raw string, where WHATWG trimming would misread
  * shapes like `host:port ` as port-less.
+ * @param entry - the raw authority string.
+ * @param entryUrl - the authority parsed as an http URL.
+ * @returns the canonical `hostname` or `hostname:port` spelling.
  */
 export function canonicalAuthority(entry: string, entryUrl: URL): string {
   // An authority that parsed under http cannot fail under https.
@@ -38,6 +44,9 @@ export function canonicalAuthority(entry: string, entryUrl: URL): string {
  * LAN serving, where the bound port may be OS-assigned). Both sides compare
  * through WHATWG normalization, so case and a redundant `:80` never decide
  * trust.
+ * @param hostUrl - the URL whose authority is being judged.
+ * @param authorities - the entry list to match against.
+ * @returns true when the URL authority matches an entry.
  */
 export function isTrustedAuthority(hostUrl: URL, authorities: readonly string[]): boolean {
   return authorities.some((entry) => {

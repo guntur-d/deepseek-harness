@@ -29,6 +29,8 @@ interface WebBootEntry {
   inject?: string[]
   /** Stage-one prefetch mark: load the script for factory registration during module-face boot. */
   immediately?: boolean
+  /** Evaluated entry config from the host config tree (absent when the row declares none). */
+  config?: unknown
 }
 ```
 
@@ -114,5 +116,5 @@ onRebuilt(listener: (id: string, rev: string) => void): () => void
 onGraphChanged(listener: () => void): () => void
 ```
 
-Source: [`packages/client/modules/src/index.ts:184`](../../packages/client/modules/src/index.ts)
+Source: [`packages/client/modules/src/index.ts:194`](../../packages/client/modules/src/index.ts)
 <!-- END GENERATED cordis-surface -->
