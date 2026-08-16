@@ -42,11 +42,27 @@ describe('source registration', () => {
     } as never)
     ctx.provide('remote', { $on: () => () => {} } as never)
     ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
+    let fileTrigger: import('@deepseek-ai/dsh-client-ui-input-trigger/client').InputTriggerSource | undefined
+    ctx.provide('inputTriggers', {
+      registerSource: (src: import('@deepseek-ai/dsh-client-ui-input-trigger/client').InputTriggerSource) => {
+        fileTrigger = src
+        return () => {}
+      },
+    } as never)
     ctx.plugin({ inject: [...localeInject], apply: localeApply })
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     const entries = slots.entries('conversation.view')
     expect(entries.map(e => e.options.id)).toEqual(['files'])
+    // The '@' trigger source rides the same fiber: workspace files, @ trigger.
+    expect(fileTrigger?.trigger).toBe('@')
+    expect(fileTrigger?.name).toBe('files')
+    const candidates = await fileTrigger?.candidates?.({ sessionId: 'session-1' } as never, {
+      query: '',
+      position: 'leading',
+      signal: new AbortController().signal,
+    })
+    expect(candidates).toEqual([])
     expect(entries[0]?.options.order).toBe(20)
     expect(entries[0]?.options.label).toBeTypeOf('function')
     // The view tab label resolves through the bound translator.
@@ -111,6 +127,7 @@ describe('source registration', () => {
     } as never)
     ctx.provide('remote', { $on: () => () => {} } as never)
     ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
+    ctx.provide('inputTriggers', { registerSource: () => () => {} } as never)
     ctx.plugin({ inject: [...localeInject], apply: localeApply })
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()

@@ -23,3 +23,9 @@ The whole-file replace is deliberate: the editor shows the exact document the pr
 **Fix only the native open** (start the server with `DISPLAY`). Rejected as the primary answer: the capability is host-desktop-dependent and untestable on headless deployments; the browser editor is the portable surface, and the native open remains one click away where it can work.
 
 **Gated fallback (editor only when `canOpenPath` is false).** Rejected: capability detection is env-based and this box reports a display that cannot actually show windows (login-screen X server); an always-available editor removes the guesswork, and the secondary native affordance preserves the desktop path.
+
+## Consequences
+
+- The raw-file editor makes the deployment's settings document directly editable from any browser that reaches the privileged plane; the whole-file replace is validated Host-side before any byte lands, so a malformed edit can never replace a working document.
+- The native opener remains reachable through the editor's secondary action where a desktop exists; headless deployments no longer present a dead control.
+- The settings file becomes an editor-owned surface alongside the schema forms: the two can overwrite each other's sections (the editor saves the whole file), so the forms' revision-based writes still protect concurrent edits within the GUI, while a raw-file save replaces everything the file holds at that moment.

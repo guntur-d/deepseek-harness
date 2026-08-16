@@ -16,13 +16,15 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 // owning package) must be in the program for the register calls to type.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { FilesView } from './FilesView.tsx'
+import { fileSource } from './file-source.ts'
 import type { FilesViewInjected } from './contract.ts'
+import type { InputTriggerServiceContract } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { en, NS, zh } from './locales.ts'
 
 export type { FilesViewInjected } from './contract.ts'
 
 /** Required services: the view slot, the wire client, and the locale service. */
-export const inject = ['slots', 'connection', 'locale']
+export const inject = ['slots', 'connection', 'locale', 'inputTriggers']
 
 /**
  * Client plugin body: register the Files view tab. The registration rides
@@ -33,6 +35,10 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-files: dictionaries')
   const t = ctx.locale.bind(NS)
   const api = (ctx.get('connection') as ConnectionHandle).api
+  // The '@' trigger source: workspace file references in the composer. It
+  // rides the same session-scoped files client as the panel below.
+  const inputTriggers = ctx.get('inputTriggers') as InputTriggerServiceContract
+  ctx.effect(() => inputTriggers.registerSource(fileSource(api)), 'ui-files: @ file source')
 
   ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view',

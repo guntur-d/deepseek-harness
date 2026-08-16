@@ -23,3 +23,9 @@ The whole-file replace is deliberate: the editor shows the exact document the pr
 **Fix only the native open** (start the server with `DISPLAY`). Rejected as the primary answer: the capability is host-desktop-dependent and untestable on headless deployments; the browser editor is the portable surface, and the native open remains one click away where it can work.
 
 **Gated fallback (editor only when `canOpenPath` is false).** Rejected: capability detection is env-based and this box reports a display that cannot actually show windows (login-screen X server); an always-available editor removes the guesswork, and the secondary native affordance preserves the desktop path.
+
+## 后果
+
+- 配置文件现在可以从任何能访问特权平面的浏览器直接编辑；整体替换在落盘前由 Host 校验，格式错误的编辑不会覆盖可用文档。
+- 在存在桌面的主机上，原生打开仍可通过编辑器内的次要按钮使用；无桌面部署不再出现无效控件。
+- 配置文件成为与表单并行的编辑面：两者可能互相覆盖各自区块（编辑器保存整个文件），因此表单的 revision 写入仍保护 GUI 内的并发编辑，而原始文件保存会替换当时文件中的全部内容。
