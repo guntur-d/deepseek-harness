@@ -148,6 +148,13 @@ export interface Config {
    * omission defaults to {@link DEFAULT_MAX_PARALLEL_TOOL_CALLS}.
    */
   maxParallelToolCalls?: number
+  /**
+   * Consecutive agent steps whose tool calls all error before the turn ends
+   * with a logged notice; a model emitting failing calls (a malformed tool
+   * name, an unavailable tool) otherwise drives the loop without bound.
+   * Omission defaults to {@link DEFAULT_MAX_CONSECUTIVE_TOOL_FAILURES}.
+   */
+  maxConsecutiveToolFailures?: number
   /** Agents created or resumed at plugin startup. */
   agents: (AgentOptions & {
     /** Stable config label used in logs and as the fresh combined-id prefix. */
@@ -237,6 +244,8 @@ export interface Config {
   agents?: AgentLoopConfig['agents']
   /** Agent-loop concurrency cap; `1` is serial. */
   maxParallelToolCalls?: AgentLoopConfig['maxParallelToolCalls']
+  /** Agent-loop consecutive all-error tool step cap before the turn ends. */
+  maxConsecutiveToolFailures?: AgentLoopConfig['maxConsecutiveToolFailures']
   /** Whether the system prompt includes the fixed Harness identity (default true). */
   includeHarnessIdentity?: SystemPromptConfig['includeHarnessIdentity']
   /** Whether model history includes dynamic runtime-context snapshots (default true). */

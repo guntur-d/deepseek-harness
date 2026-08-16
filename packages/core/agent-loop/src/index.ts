@@ -27,7 +27,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-tools'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import { ReactLoopAgent } from './agent.ts'
-import { DEFAULT_MAX_PARALLEL_TOOL_CALLS } from './constants.ts'
+import { DEFAULT_MAX_CONSECUTIVE_TOOL_FAILURES, DEFAULT_MAX_PARALLEL_TOOL_CALLS } from './constants.ts'
 
 /** Fiber states that cannot own or serve a new lifecycle. */
 const INACTIVE_STATES: ReadonlySet<FiberState> = new Set([
@@ -138,6 +138,15 @@ function resolveMaxParallelToolCalls(value: number | undefined): number {
   return maxParallelToolCalls
 }
 
+/** Resolve the consecutive tool-failure cap at the owning config boundary. */
+function resolveMaxConsecutiveToolFailures(value: number | undefined): number {
+  const maxConsecutiveToolFailures = value ?? DEFAULT_MAX_CONSECUTIVE_TOOL_FAILURES
+  if (!Number.isInteger(maxConsecutiveToolFailures) || maxConsecutiveToolFailures < 1) {
+    throw new Error('maxConsecutiveToolFailures must be a positive integer')
+  }
+  return maxConsecutiveToolFailures
+}
+
 /** Reject an output-token cap that cannot be represented exactly on the request wire. */
 function assertAgentOptions(options: AgentOptions): void {
   if (options.maxTokens !== undefined
@@ -184,7 +193,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-export { DEFAULT_MAX_PARALLEL_TOOL_CALLS }
+export { DEFAULT_MAX_PARALLEL_TOOL_CALLS, DEFAULT_MAX_CONSECUTIVE_TOOL_FAILURES }
 
 /**
  * One launcher-selected session identity for a configured agent. `resume`
@@ -244,11 +253,14 @@ export const AGENT_LOOP_SETTINGS_NAMESPACE = settingsNamespace('agent-loop')
 export interface AgentLoopSettings {
   /** Maximum parallel-safe calls in flight per agent step. */
   maxParallelToolCalls: number
+  /** Consecutive all-error tool steps before the turn ends with a notice. */
+  maxConsecutiveToolFailures: number
 }
 
 /** Schema of the agent-loop settings section. */
 export const AGENT_LOOP_SETTINGS_SCHEMA: z<AgentLoopSettings> = z.object({
   maxParallelToolCalls: z.number().step(1).min(1).default(DEFAULT_MAX_PARALLEL_TOOL_CALLS),
+  maxConsecutiveToolFailures: z.number().step(1).min(1).default(DEFAULT_MAX_CONSECUTIVE_TOOL_FAILURES),
 })
 
 /** Agent-loop plugin configuration. */
@@ -258,6 +270,13 @@ export interface Config {
    * omission defaults to {@link DEFAULT_MAX_PARALLEL_TOOL_CALLS}.
    */
   maxParallelToolCalls?: number
+  /**
+   * Consecutive agent steps whose tool calls all error before the turn ends
+   * with a logged notice; a model emitting failing calls (a malformed tool
+   * name, an unavailable tool) otherwise drives the loop without bound.
+   * Omission defaults to {@link DEFAULT_MAX_CONSECUTIVE_TOOL_FAILURES}.
+   */
+  maxConsecutiveToolFailures?: number
   /** Agents created or resumed at plugin startup. */
   agents: (AgentOptions & {
     /** Stable config label used in logs and as the fresh combined-id prefix. */
@@ -272,7 +291,7 @@ export interface Config {
 }
 
 /** Agent-loop configuration after defaults and load-time validation. */
-type ResolvedConfig = Config & { maxParallelToolCalls: number }
+type ResolvedConfig = Config & { maxParallelToolCalls: number; maxConsecutiveToolFailures: number }
 
 /** Reject self-contained identity conflicts before any configured agent starts. */
 function validateConfiguredAgents(agents: Config['agents']): void {
@@ -299,6 +318,7 @@ export class AgentLoop extends Service implements AgentFactory {
   /** Runtime schema for declarative agents. */
   static Config = z.object({
     maxParallelToolCalls: z.number().step(1).min(1).default(DEFAULT_MAX_PARALLEL_TOOL_CALLS),
+    maxConsecutiveToolFailures: z.number().step(1).min(1).default(DEFAULT_MAX_CONSECUTIVE_TOOL_FAILURES),
     agents: z.array(z.object({
       id: z.string().required(),
       sessionId: z.string().min(1),
@@ -320,16 +340,20 @@ export class AgentLoop extends Service implements AgentFactory {
     super(ctx, 'agentLoop')
     const entry: AgentLoopSettings = {
       maxParallelToolCalls: resolveMaxParallelToolCalls(config.maxParallelToolCalls),
+      maxConsecutiveToolFailures: resolveMaxConsecutiveToolFailures(config.maxConsecutiveToolFailures),
     }
     let source: () => AgentLoopSettings = () => entry
     this.config = {
       ...config,
       agents: applyLauncherIdentities(config.agents, ctx.get(CONFIGURED_AGENT_IDENTITIES_KEY)),
-      // Read through on every scheduler decision: `tool-calls.ts` destructures
-      // this at the start of each group, so a committed change caps the next
-      // group without disturbing the one in flight.
+      // Read through on every step decision: `agent.ts` reads this at the top
+      // of each step, so a committed change caps the next step without
+      // disturbing the one in flight.
       get maxParallelToolCalls() {
         return source().maxParallelToolCalls
+      },
+      get maxConsecutiveToolFailures() {
+        return source().maxConsecutiveToolFailures
       },
     }
     installSettingsSection(ctx, AGENT_LOOP_SETTINGS_NAMESPACE, AGENT_LOOP_SETTINGS_SCHEMA, entry, {
@@ -340,7 +364,7 @@ export class AgentLoop extends Service implements AgentFactory {
       setSource: (current) => {
         source = current
       },
-      // Nothing is derived from the cap: the getter above is the only reader.
+      // Nothing is derived from the caps: the getters above are the only readers.
       onChange: () => {},
     })
     validateConfiguredAgents(this.config.agents)

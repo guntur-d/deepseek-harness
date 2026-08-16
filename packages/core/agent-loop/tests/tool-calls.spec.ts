@@ -759,4 +759,28 @@ describe('code-mode native-tool denial through the agent loop', () => {
       code: 'UNKNOWN_TOOL',
     })
   })
+
+  it('ends the turn after the consecutive all-error tool step cap', async () => {
+    // A model that keeps emitting calls to an unavailable tool: each step
+    // consumes one script entry and errors. The default cap is 3, so the turn
+    // ends there and the 4th script entry (a text response) is never used.
+    const adapter = new MockAdapter([
+      multiCall([{ id: 'c1', name: 'no-such-tool', args: {} }]),
+      multiCall([{ id: 'c2', name: 'no-such-tool', args: {} }]),
+      multiCall([{ id: 'c3', name: 'no-such-tool', args: {} }]),
+      textResponse('unused: the turn must end at the cap'),
+    ])
+    const ctx = await harness(adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    expect(adapter.requests).toHaveLength(3)
+    const notices = events(agent)
+      .filter(e => e.type === 'user/message')
+      .flatMap(e => e.data.content)
+      .filter(b => b.type === 'text')
+    expect(notices.some(b => b.text.includes('consecutive tool steps all errored'))).toBe(true)
+    await ctx.fiber.dispose()
+  })
 })
