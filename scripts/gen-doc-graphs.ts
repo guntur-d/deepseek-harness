@@ -461,6 +461,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The basic backend consumes post-step pressure and request-error recovery events; there is no model-facing compact tool.',
   },
   {
+    key: 'memory',
+    pkg: 'memory',
+    title: 'Persistent cross-session memory store',
+    mode: 'seam',
+    implementations: ['memory'],
+    consumers: ['memory-tool'],
+    note: 'memory stores workspace-scoped facts on the storage-domain seam; memory-tool is the model-facing write/list/search/forget consumer and the bounded prompt injection.',
+  },
+  {
     key: 'subagents',
     pkg: 'subagent',
     title: 'Subagent provider and continuation service',

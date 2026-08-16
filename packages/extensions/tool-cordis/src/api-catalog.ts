@@ -882,6 +882,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'memory',
+    summary: 'The persistent-memory service.',
+    description: 'The persistent-memory service. Reads are synchronous from the domain\'s authoritative in-memory state; saves and forgets await durability on the routed storage backend. Every mutation appends the matching `memory/*` event to the owning session\'s log.',
+    methods: [
+      {
+        signature: 'async save(agent: Agent, input: MemoryEntryInput): Promise<MemoryEntry>',
+        description: 'Remember one fact in the caller\'s workspace and record it in the caller\'s session log. The entry is durable before the promise resolves; past the per-workspace cap the oldest entries are evicted.',
+        parameters: [{ name: 'agent', description: 'the live agent whose session scope owns the memory.' }, { name: 'input', description: 'the fact to remember.' }],
+        returns: 'the durable entry.',
+      },
+      {
+        signature: 'list(agent: Agent, options?: { limit?: number }): readonly MemoryEntry[]',
+        description: 'The caller\'s workspace memories, newest first.',
+        parameters: [{ name: 'agent', description: 'the live agent whose session scope owns the memory.' }, { name: 'options', description: 'optional `limit` on the returned count.' }],
+        returns: 'the matching entries, newest first.',
+      },
+      {
+        signature: 'search(agent: Agent, query: string): readonly MemoryEntry[]',
+        description: 'Case-insensitive substring search over the caller\'s workspace memories\' text and tags, newest first.',
+        parameters: [{ name: 'agent', description: 'the live agent whose session scope owns the memory.' }, { name: 'query', description: 'the search text; an empty query matches nothing.' }],
+        returns: 'the matching entries, newest first.',
+      },
+      {
+        signature: 'async forget(agent: Agent, id: MemoryId): Promise<boolean>',
+        description: 'Forget one memory in the caller\'s workspace. A memory belonging to another workspace is refused (the model can only cite ids it was shown).',
+        parameters: [{ name: 'agent', description: 'the live agent whose session scope owns the memory.' }, { name: 'id', description: 'the memory to remove.' }],
+        returns: 'true when the memory existed and was removed.',
+      },
+    ],
+  },
+  {
     key: 'messageFeedback',
     summary: 'Storage-domain sidecar service.',
     description: 'Storage-domain sidecar service. It inspects persisted Session history and never creates or resumes an Agent or Session.',
@@ -3360,6 +3391,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ManualCompactAgentContext',
     declaration: 'export interface ManualCompactAgentContext extends CompactionAgentContext {\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n}',
+  },
+  {
+    name: 'MemoryEntry',
+    declaration: 'export interface MemoryEntry {\n    id: MemoryId;\n    workspace: string;\n    text: string;\n    tags: readonly string[];\n    importance: MemoryImportance;\n    seq: number;\n    createdAt: number;\n    sourceSession: SessionId;\n}',
+  },
+  {
+    name: 'MemoryEntryInput',
+    declaration: 'export interface MemoryEntryInput {\n    text: string;\n    tags?: readonly string[];\n    importance?: MemoryImportance;\n}',
+  },
+  {
+    name: 'MemoryId',
+    declaration: 'export type MemoryId = Branded<\'memory-id\'>;',
+  },
+  {
+    name: 'MemoryImportance',
+    declaration: 'export type MemoryImportance = \'low\' | \'medium\' | \'high\';',
   },
   {
     name: 'Message',
