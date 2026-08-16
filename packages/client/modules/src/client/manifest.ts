@@ -58,6 +58,8 @@ export interface WebBootEntry {
   inject?: string[]
   /** Stage-one prefetch mark: load the script for factory registration during module-face boot. */
   immediately?: boolean
+  /** Evaluated entry config from the host config tree (absent when the row declares none). */
+  config?: unknown
 }
 
 /** The composed client entry graph the host injects as `window.__DSH_BOOT__`. */
@@ -86,6 +88,8 @@ export interface BootPluginRow {
   inject: string[]
   /** Stage-one prefetch tier (false when the wire omits it). */
   immediately: boolean
+  /** Evaluated entry config (undefined when the wire omits it). */
+  config?: unknown
 }
 
 /** The parsed boot manifest: one wire, two consumer views. */
@@ -138,6 +142,7 @@ export function parseBootManifest(wire: unknown): BootManifest {
       id: row.id,
       inject: row.inject === undefined ? [] : [...row.inject as string[]],
       immediately: row.immediately === true,
+      ...(row.config === undefined ? {} : { config: row.config }),
     })
   }
   return { rev: graph.rev, modules, plugins }

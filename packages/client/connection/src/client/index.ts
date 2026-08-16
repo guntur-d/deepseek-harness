@@ -10,6 +10,7 @@ import { FixtureApiClient } from './fixture.ts'
 import { WebApiClient } from './web-api-client.ts'
 import { createWebConnectionRpc } from './rpc.ts'
 import { isLoopbackHostname } from '../loopback-hostname.ts'
+import { isTrustedPageAuthority } from '../authority.ts'
 import type { ClientConnectionRpc } from '../rpc.ts'
 
 // ---- Contract re-exports (browser-safe apiproxy channels + core types) ----
@@ -50,6 +51,19 @@ export interface HostDescriptionSource {
   subscribe(listener: () => void): () => void
 }
 
+/**
+ * The deployment config the boot graph carries for this entry (browser-safe
+ * mirror of the node half's {@link ConnectionConfig}): the authorities the
+ * deployment serves beyond loopback, and the subset of those that may reach
+ * the privileged method plane.
+ */
+export interface BrowserConnectionConfig {
+  /** Non-loopback authorities this deployment serves (`host` or `host:port`). */
+  trustedHosts?: string[]
+  /** The subset of {@link BrowserConnectionConfig.trustedHosts} that may reach the privileged plane. */
+  privilegedHosts?: string[]
+}
+
 /** Required services (none — this is the wire root). */
 export const inject: string[] = []
 
@@ -63,6 +77,13 @@ export interface ConnectionHandle {
   readonly api: IApiClient
   /** Whether the current page authority is loopback; non-browser contexts default to true. */
   readonly isLoopback: boolean
+  /**
+   * Whether the current page authority is a deployment-declared privileged
+   * remote (the `privilegedHosts` config the boot graph carries). Loopback
+   * pages are covered by {@link isLoopback}; this flag covers the
+   * `--allow-privileged-remote` authorities a remote browser may stand on.
+   */
+  readonly isPrivilegedRemote: boolean
   /** Generation-scoped Host facts, including native path-open capability. */
   readonly hostDescription: HostDescriptionSource
   /** Generic logical RPC channels over the same Connection transport. */
@@ -81,13 +102,26 @@ export interface ConnectionHandle {
 /**
  * Client plugin body: pick the api by page mode and provide ctx.connection.
  * @param ctx - client cordis context.
+ * @param config - deployment config carried by the boot graph: the privileged
+ * authorities a remote page may stand on (`privilegedHosts`); absent in
+ * hand-built test contexts, which default to no privileged remotes.
  */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config?: BrowserConnectionConfig): void {
   const pageLocation = typeof location === 'undefined' ? undefined : location
   const fixture = pageLocation !== undefined && new URLSearchParams(pageLocation.search).has('fixture')
   const fixtureClient = fixture ? new FixtureApiClient() : undefined
   const api: IApiClient = fixtureClient ?? new WebApiClient()
   const rpc = fixtureClient?.rpc ?? createWebConnectionRpc()
+  const privileged = config?.privilegedHosts ?? []
+  const isPrivilegedRemote = pageLocation === undefined
+    ? false
+    : isTrustedPageAuthority(
+      // The real page always carries href; minimal stubs only name a hostname.
+      pageLocation.href === undefined || pageLocation.href === ''
+        ? new URL(`http://${pageLocation.hostname}`)
+        : new URL(pageLocation.href),
+      privileged,
+    )
   let started = false
   let description: HostDescription | undefined
   const descriptionListeners = new Set<() => void>()
@@ -105,6 +139,7 @@ export function apply(ctx: Context): void {
   const handle: ConnectionHandle = {
     api,
     isLoopback: pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
+    isPrivilegedRemote,
     hostDescription: {
       getSnapshot: () => description,
       subscribe: (listener) => {

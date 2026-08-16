@@ -38,13 +38,20 @@ function writePackage(
 }
 
 /** Construct the node-half service and capture its plugin-bundle route. */
-function constructWithRoute(packageNames: string[]): { service: ClientModuleRegistry; route: WebRoute } {
+function constructWithRoute(
+  packageNames: string[],
+  configs?: Record<string, unknown>,
+): { service: ClientModuleRegistry; route: WebRoute } {
   const ctx = new Context()
   ctx.baseUrl = pathToFileURL(root!).href + '/'
   ctx.provide('loader', {
     *entries() {
       for (const packageName of packageNames) {
-        yield { options: { name: packageName }, fiber: {}, disabled: false }
+        yield {
+          options: { name: packageName, ...(configs?.[packageName] === undefined ? {} : { config: configs[packageName] }) },
+          fiber: {},
+          disabled: false,
+        }
       }
     },
   })
@@ -81,6 +88,30 @@ describe('client bundle activation', () => {
     mkdirSync(dirname(clientPath), { recursive: true })
     writeFileSync(clientPath, 'module.exports = {}\n')
     expect(construct([currentName]).graph().entries.map(entry => entry.id)).toEqual([currentName])
+  })
+
+  it('carries the loader entry config into the boot graph row', () => {
+    const currentName = '@fixture/config-row'
+    const clientPath = writePackage(currentName, {
+      dsh: { client: { platform: 'web' } },
+    })
+    mkdirSync(dirname(clientPath), { recursive: true })
+    writeFileSync(clientPath, 'module.exports = {}\n')
+    const config = { privilegedHosts: ['192.0.2.20'], trustedHosts: [] }
+    const row = constructWithRoute([currentName], { [currentName]: config })
+      .service.graph().entries.find(entry => entry.id === currentName)
+    expect(row?.config).toEqual(config)
+  })
+
+  it('omits the config key from graph rows without one', () => {
+    const currentName = '@fixture/configless-row'
+    const clientPath = writePackage(currentName, {
+      dsh: { client: { platform: 'web' } },
+    })
+    mkdirSync(dirname(clientPath), { recursive: true })
+    writeFileSync(clientPath, 'module.exports = {}\n')
+    const row = construct([currentName]).graph().entries[0]
+    expect(row).not.toHaveProperty('config')
   })
 
   it('groups missing bundles under one source-build instruction with a package/path list', () => {
