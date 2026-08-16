@@ -2914,6 +2914,12 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       }),
       // Native opens are deterministic no-op successes in this fixture, as is host.openPath.
       openDocument: request => ok(request, { opened: true as const }),
+      documentRead: request => ok(request, { path: '/fixture/settings.yaml', content: '# fixture settings document\n' }),
+      documentWrite: request => err(request, {
+        code: 'internal',
+        message: 'fixture: the minimal readiness settings descriptor is read-only',
+        details: {},
+      }),
       update: request => err(request, {
         code: 'settings-rejected',
         message: 'fixture: the minimal readiness settings descriptor is read-only',
@@ -3134,6 +3140,8 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'goal.clear': return this.api.goals.clear(request)
       case 'settings.describe': return this.api.settings.describe(request)
       case 'settings.openDocument': return this.api.settings.openDocument(request, signal)
+      case 'settings.documentRead': return this.api.settings.documentRead(request)
+      case 'settings.documentWrite': return this.api.settings.documentWrite(request)
       case 'settings.update': return this.api.settings.update(request)
       case 'settings.replace': return this.api.settings.replace(request)
       case 'settings.mutate': return this.api.settings.mutate(request)

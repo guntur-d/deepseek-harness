@@ -181,6 +181,38 @@ export class FileSettingsProvider extends SettingsProvider {
     return doc
   }
 
+  /** The raw document text a browser or native editor would show. */
+  override async readDocument(): Promise<string | undefined> {
+    return this.enqueue(async () => {
+      try {
+        return await readFile(this.spec.filename, 'utf8')
+      } catch (error) {
+        if (isENOENT(error)) return undefined
+        throw error
+      }
+    })
+  }
+
+  /**
+   * Replace the whole document after validating it. The replacement must
+   * parse exactly like the document the provider reads — an unparsable write
+   * fails loud before any byte touches disk.
+   */
+  override async writeDocument(content: string): Promise<void> {
+    return this.enqueue(async () => {
+      // Parse first: never replace a working document with one that cannot
+      // round-trip (the same gate the boot-time load applies).
+      const parsed = this.parse(content)
+      await mkdir(dirname(this.spec.filename), { recursive: true, mode: 0o700 })
+      await withFileLock(this.spec.filename, async () => {
+        await writeFileAtomic(this.spec.filename, content, { mode: 0o600, dirMode: 0o700 })
+        // Self-write suppression: the watcher compares against this cache.
+        this.text = content
+      })
+      if (!this.isClosed()) this.publish(parsed)
+    })
+  }
+
   protected persist(ns: SettingsNamespace, section: Record<string, unknown>): Promise<void> {
     // One document backs every namespace, so writes from different namespace
     // queues serialize with each other and with watcher reloads on the one

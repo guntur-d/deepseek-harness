@@ -1442,6 +1442,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the absolute local document path, or undefined for non-file storage.',
       },
       {
+        signature: 'readDocument(): Promise<string | undefined>',
+        description: 'Read the provider\'s raw user-editable document text — the exact bytes a native or browser editor would show. Non-file providers have no document and return undefined.',
+        parameters: [],
+        returns: 'the raw document text, or undefined when the provider has none.',
+      },
+      {
+        signature: 'writeDocument(_content: string): Promise<void>',
+        description: 'Replace the provider\'s raw user-editable document text. File providers validate the replacement before persisting it; non-file providers refuse.',
+        parameters: [{ name: '_content', description: 'the full replacement document text (unused in the non-file default).' }],
+        throws: ['when the provider has no document or the content does not parse.'],
+      },
+      {
         signature: 'register<T>(ns: SettingsNamespace, schema: z<T>, options?: SettingsRegisterOptions<T>): SettingsScope<T>',
         description: 'Register a namespace schema and receive its owner scope. The registration is an effect on the calling plugin\'s fiber: disposing that fiber removes the namespace and its observers. An invalid stored section fails the registration itself — the earliest point where the schema can judge it.',
         parameters: [{ name: 'ns', description: 'unique namespace; duplicate registration fails loud.' }, { name: 'schema', description: 'schemastery schema resolving this namespace\'s value.' }, { name: 'options', description: 'composition `base` layer and effect timing.' }],

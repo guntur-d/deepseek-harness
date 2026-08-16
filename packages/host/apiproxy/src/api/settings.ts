@@ -75,6 +75,27 @@ export interface SettingsApi {
   ): Promise<RpcResponse<{ opened: true }>>
 
   /**
+   * Read the provider's raw user-editable document for in-browser editing:
+   * the exact text a native editor would show. `path` names the document for
+   * display only — the browser never writes through it.
+   */
+  documentRead(request: RpcRequest<{}>): Promise<RpcResponse<{
+    /** Absolute Host path of the document, for display. */
+    path: string
+    /** Raw document text (empty when the document does not exist yet). */
+    content: string
+  }>>
+
+  /**
+   * Replace the provider's raw user-editable document text. The Host parses
+   * the replacement before persisting; an invalid document is refused with
+   * `settings-rejected` rather than replacing a working one.
+   */
+  documentWrite(
+    request: RpcRequest<{ content: string }>,
+  ): Promise<RpcResponse<{ written: true }>>
+
+  /**
    * Merge a patch into one namespace's user layer (validate → persist →
    * commit). Secret-role fields may be INCLUDED in the patch (write-only
    * direction); a form that leaves a secret untouched simply omits it and the

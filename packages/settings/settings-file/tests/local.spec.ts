@@ -110,6 +110,73 @@ describe('boot and reads', () => {
     expect(written).toContain('theme: light')
   })
 
+  it('reads the raw document text back exactly as written', async () => {
+    const dir = await tempDir()
+    const path = join(dir, 'settings.yaml')
+    const contents = '# my settings\nui-theme:\n  theme: light\n'
+    await writeFile(path, contents)
+    const ctx = await boot({ path, watch: false })
+
+    await expect(ctx.settings.readDocument()).resolves.toBe(contents)
+  })
+
+  it('reads undefined from an absent document', async () => {
+    const dir = await tempDir()
+    const path = join(dir, 'settings.yaml')
+    const ctx = await boot({ path, watch: false })
+
+    await expect(ctx.settings.readDocument()).resolves.toBeUndefined()
+  })
+
+  it('replaces the whole document after validation and publishes the new sections', async () => {
+    const dir = await tempDir()
+    const path = join(dir, 'settings.yaml')
+    await writeFile(path, 'ui-theme:\n  theme: light\n')
+    const ctx = await boot({ path, watch: false })
+    const scope = ctx.settings.register(settingsNamespace('ui-theme'), ThemeSchema)
+    const replacement = '# edited\nui-theme:\n  theme: dark\n'
+
+    await ctx.settings.writeDocument(replacement)
+    expect(await readFile(path, 'utf8')).toBe(replacement)
+    expect(scope.get()).toEqual({ theme: 'dark', fontSize: 14 })
+  })
+
+  it('refuses an invalid document replacement without touching the file', async () => {
+    const dir = await tempDir()
+    const path = join(dir, 'settings.yaml')
+    const contents = 'ui-theme:\n  theme: light\n'
+    await writeFile(path, contents)
+    const ctx = await boot({ path, watch: false })
+
+    await expect(ctx.settings.writeDocument('ui-theme: [unclosed')).rejects.toThrow(/invalid document/)
+    expect(await readFile(path, 'utf8')).toBe(contents)
+  })
+
+  it('fails the raw read loud on an unreadable document', async () => {
+    const dir = await tempDir()
+    const path = join(dir, 'settings.yaml')
+    await writeFile(path, 'ui-theme:\n  theme: light\n')
+    const ctx = await boot({ path, watch: false })
+    await chmod(path, 0o000)
+    await expect(ctx.settings.readDocument()).rejects.toThrow()
+    await chmod(path, 0o600)
+  })
+
+  it('writes after disposal without publishing a reload', async () => {
+    const dir = await tempDir()
+    const path = join(dir, 'settings.yaml')
+    await writeFile(path, 'ui-theme:\n  theme: light\n')
+    const ctx = new Context()
+    const fiber = ctx.plugin(FileSettingsProvider, { path, watch: false })
+    cleanups.push(async () => { await fiber.dispose() })
+    await fiber
+    const provider = ctx.get('settings')
+    await fiber.dispose()
+
+    await provider!.writeDocument('# after dispose\n')
+    expect(await readFile(path, 'utf8')).toBe('# after dispose\n')
+  })
+
   it('reads an empty yaml document as no sections', async () => {
     const dir = await tempDir()
     const path = join(dir, 'settings.yaml')

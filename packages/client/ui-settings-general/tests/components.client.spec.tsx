@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import type { GeneralSectionComponentProps } from '../src/client/GeneralSection.tsx'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
@@ -59,32 +59,42 @@ describe('GeneralSection', () => {
 })
 
 describe('SettingsDocumentAction', () => {
-  it('appears only for a file-backed provider and requests its Host-owned document', async () => {
-    const openDocument = vi.fn(() => Promise.resolve({
-      rpcId: 'document-open' as never,
-      result: { ok: true as const, value: { opened: true as const } },
-    }))
-    const controller = new SettingsDocumentStore({
-      settings: {
-        describe: vi.fn(() => Promise.resolve({
-          rpcId: 'document-action' as never,
-          result: {
-            ok: true as const,
-            value: { writable: true, hasDocument: true, namespaces: [] },
-          },
-        })),
-        openDocument,
+  const readySettings = (overrides: Record<string, unknown> = {}) => ({
+    describe: vi.fn(() => Promise.resolve({
+      rpcId: 'document-action' as never,
+      result: {
+        ok: true as const,
+        value: { writable: true, hasDocument: true, namespaces: [] },
       },
-    } as never)
-    render(<SettingsDocumentAction
+    })),
+    openDocument: vi.fn(),
+    documentRead: vi.fn(() => Promise.resolve({
+      rpcId: 'document-read' as never,
+      result: { ok: true as const, value: { path: '/home/test/settings.yaml', content: '# hello\n' } },
+    })),
+    documentWrite: vi.fn(),
+    ...overrides,
+  })
+
+  function mountAction(controller: SettingsDocumentStore) {
+    return render(<SettingsDocumentAction
       {...kit}
       t={t}
       controller={controller}
       useSnapshot={bindSnapshotSelector(controller.store)}
     />)
-    const action = await screen.findByRole('button', { name: 'Open configuration file' })
-    fireEvent.click(action)
-    await waitFor(() => { expect(openDocument).toHaveBeenCalledWith({}) })
+  }
+
+  it('appears only for a file-backed provider and opens the in-browser editor', async () => {
+    const settings = readySettings()
+    const controller = new SettingsDocumentStore({ settings } as never, () => true)
+    mountAction(controller)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open configuration file' }))
+    await waitFor(() => { expect(settings.documentRead).toHaveBeenCalledWith({}) })
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByLabelText('Configuration file content')).toBeTruthy()
+    expect(within(dialog).getByText('/home/test/settings.yaml')).toBeTruthy()
+    expect(within(dialog).getByLabelText<HTMLTextAreaElement>('Configuration file content').value).toBe('# hello\n')
   })
 
   it('stays absent without a document and retries availability after remount', async () => {
@@ -98,54 +108,89 @@ describe('SettingsDocumentAction', () => {
         result: { ok: true as const, value: { writable: true, hasDocument: true, namespaces: [] } },
       })
     const controller = new SettingsDocumentStore({
-      settings: {
-        describe,
-        openDocument: vi.fn(),
-      },
-    } as never)
-    const first = render(<SettingsDocumentAction
-      {...kit}
-      t={t}
-      controller={controller}
-      useSnapshot={bindSnapshotSelector(controller.store)}
-    />)
+      settings: { describe, openDocument: vi.fn(), documentRead: vi.fn(), documentWrite: vi.fn() },
+    } as never, () => false)
+    const first = mountAction(controller)
     await waitFor(() => { expect(controller.store.getSnapshot().status).toBe('unavailable') })
     expect(screen.queryByRole('button', { name: 'Open configuration file' })).toBeNull()
     first.unmount()
-    render(<SettingsDocumentAction
-      {...kit}
-      t={t}
-      controller={controller}
-      useSnapshot={bindSnapshotSelector(controller.store)}
-    />)
+    mountAction(controller)
     expect(await screen.findByRole('button', { name: 'Open configuration file' })).toBeTruthy()
     expect(describe).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps the action available and reports a native-open failure', async () => {
+  it('offers the native open inside the editor only when the Host can reach a desktop', async () => {
+    const openDocument = vi.fn(() => Promise.resolve({
+      rpcId: 'document-open-failed' as never,
+      result: { ok: false as const, error: { code: 'internal' as const, message: 'xdg-open missing', details: {} } },
+    }))
     const controller = new SettingsDocumentStore({
-      settings: {
-        describe: vi.fn(() => Promise.resolve({
-          rpcId: 'document-action' as never,
-          result: {
-            ok: true as const,
-            value: { writable: true, hasDocument: true, namespaces: [] },
-          },
-        })),
-        openDocument: vi.fn(() => Promise.resolve({
-          rpcId: 'document-open-failed' as never,
-          result: { ok: false as const, error: { code: 'internal' as const, message: 'xdg-open missing', details: {} } },
-        })),
-      },
-    } as never)
-    render(<SettingsDocumentAction
-      {...kit}
-      t={t}
-      controller={controller}
-      useSnapshot={bindSnapshotSelector(controller.store)}
-    />)
+      settings: readySettings({ openDocument }),
+    } as never, () => true)
+    mountAction(controller)
     fireEvent.click(await screen.findByRole('button', { name: 'Open configuration file' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Open configuration file' }))
+    await waitFor(() => { expect(openDocument).toHaveBeenCalledWith({}) })
     expect((await screen.findByRole('alert')).textContent).toBe('Could not open configuration file')
-    expect(screen.getByRole('button', { name: 'Open configuration file' })).toBeTruthy()
+  })
+
+  it('hides the native-open affordance when the Host cannot open natively', async () => {
+    const openDocument = vi.fn()
+    const controller = new SettingsDocumentStore({
+      settings: readySettings({ openDocument }),
+    } as never, () => false)
+    mountAction(controller)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open configuration file' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('button', { name: 'Open configuration file' })).toBeNull()
+    expect(openDocument).not.toHaveBeenCalled()
+  })
+
+  it('saves the edited document through the Host and closes the editor', async () => {
+    const documentWrite = vi.fn(() => Promise.resolve({
+      rpcId: 'document-write' as never,
+      result: { ok: true as const, value: { written: true as const } },
+    }))
+    const controller = new SettingsDocumentStore({
+      settings: readySettings({ documentWrite }),
+    } as never, () => false)
+    mountAction(controller)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open configuration file' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Configuration file content'), { target: { value: '# edited\n' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => { expect(documentWrite).toHaveBeenCalledWith({ content: '# edited\n' }) })
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
+  })
+
+  it('keeps the editor open and reports a rejected write', async () => {
+    const documentWrite = vi.fn(() => Promise.resolve({
+      rpcId: 'document-write' as never,
+      result: { ok: false as const, error: { code: 'internal' as const, message: 'invalid document', details: {} } },
+    }))
+    const controller = new SettingsDocumentStore({
+      settings: readySettings({ documentWrite }),
+    } as never, () => false)
+    mountAction(controller)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open configuration file' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => { expect(within(dialog).getByRole('alert').textContent).toContain('invalid document') })
+    expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+
+  it('cancel discards staged edits', async () => {
+    const documentWrite = vi.fn()
+    const controller = new SettingsDocumentStore({
+      settings: readySettings({ documentWrite }),
+    } as never, () => false)
+    mountAction(controller)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open configuration file' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Configuration file content'), { target: { value: '# edited\n' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
+    expect(documentWrite).not.toHaveBeenCalled()
   })
 })

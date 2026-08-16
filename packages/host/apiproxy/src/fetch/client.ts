@@ -55,7 +55,8 @@ import {
   goalClearValueSchema,
 } from '../api/goals.schema.ts'
 import {
-  settingsDescribeValueSchema, settingsMutateValueSchema, settingsOpenDocumentValueSchema,
+  settingsDescribeValueSchema, settingsDocumentReadValueSchema, settingsDocumentWriteValueSchema,
+  settingsMutateValueSchema, settingsOpenDocumentValueSchema,
   settingsReplaceValueSchema, settingsUpdateValueSchema,
 } from '../api/settings.schema.ts'
 import {
@@ -151,6 +152,8 @@ export interface IApiClient {
   settings: {
     describe(payload: RequestPayload<'settings.describe'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'settings.describe'>>>
     openDocument(payload: RequestPayload<'settings.openDocument'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'settings.openDocument'>>>
+    documentRead(payload: RequestPayload<'settings.documentRead'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'settings.documentRead'>>>
+    documentWrite(payload: RequestPayload<'settings.documentWrite'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'settings.documentWrite'>>>
     update(payload: RequestPayload<'settings.update'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'settings.update'>>>
     replace(payload: RequestPayload<'settings.replace'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'settings.replace'>>>
     mutate(payload: RequestPayload<'settings.mutate'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'settings.mutate'>>>
@@ -223,6 +226,8 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'goal.clear': goalClearValueSchema,
   'settings.describe': settingsDescribeValueSchema,
   'settings.openDocument': settingsOpenDocumentValueSchema,
+  'settings.documentRead': settingsDocumentReadValueSchema,
+  'settings.documentWrite': settingsDocumentWriteValueSchema,
   'settings.update': settingsUpdateValueSchema,
   'settings.replace': settingsReplaceValueSchema,
   'settings.mutate': settingsMutateValueSchema,
@@ -498,6 +503,8 @@ export abstract class AbstractApiClient implements IApiClient {
   readonly settings: IApiClient['settings'] = {
     describe: (payload, signal) => this.callUnary('settings.describe', payload, signal),
     openDocument: (payload, signal) => this.callUnary('settings.openDocument', payload, signal),
+    documentRead: (payload, signal) => this.callUnary('settings.documentRead', payload, signal),
+    documentWrite: (payload, signal) => this.callUnary('settings.documentWrite', payload, signal),
     update: (payload, signal) => this.callUnary('settings.update', payload, signal),
     replace: (payload, signal) => this.callUnary('settings.replace', payload, signal),
     mutate: (payload, signal) => this.callUnary('settings.mutate', payload, signal),

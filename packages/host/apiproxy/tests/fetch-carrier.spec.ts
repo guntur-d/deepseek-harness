@@ -250,6 +250,12 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async openDocument(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { opened: true as const } } }
       },
+      async documentRead(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { path: '/stub/settings.yaml', content: '' } } }
+      },
+      async documentWrite(request) {
+        return { rpcId: request.rpcId, result: { ok: false, error: { code: 'internal', message: 'stub', details: {} } } }
+      },
       async update(request) {
         return { rpcId: request.rpcId, result: { ok: false, error: { code: 'settings-rejected', message: 'stub', details: { ns: request.payload.ns } } } }
       },
@@ -418,6 +424,18 @@ describe('unary round trip (handler ⇄ client, no network)', () => {
     expect((await c.agentPresets.openDocument({ agentPreset: 'mine' })).result)
       .toEqual({ ok: true, value: { opened: true } })
     expect((await c.agentPresets.remove({ agentPreset: 'mine' })).result).toEqual({ ok: true, value: {} })
+  })
+
+  it('round-trips the settings document methods through the carrier', async () => {
+    const c = client()
+    expect((await c.settings.describe({})).result).toEqual({
+      ok: true, value: { writable: true, hasDocument: false, namespaces: [] },
+    })
+    expect((await c.settings.openDocument({})).result).toEqual({ ok: true, value: { opened: true } })
+    expect((await c.settings.documentRead({})).result)
+      .toEqual({ ok: true, value: { path: '/stub/settings.yaml', content: '' } })
+    expect((await c.settings.documentWrite({ content: '# stub\n' })).result)
+      .toEqual({ ok: false, error: { code: 'internal', message: 'stub', details: {} } })
   })
 
   it('round-trips the native picker without the default unary timeout', async () => {

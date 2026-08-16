@@ -34,10 +34,11 @@ describe('SettingsDocumentStore', () => {
   it('loads provider metadata and asks the settings domain to open its document', async () => {
     const describe = vi.fn(() => Promise.resolve(response(true)))
     const openDocument = vi.fn(() => Promise.resolve(opened()))
-    const controller = new SettingsDocumentStore({ settings: { describe, openDocument } } as never)
+    const controller = new SettingsDocumentStore({ settings: { describe, openDocument } } as never, () => true)
     await controller.load()
     expect(controller.store.getSnapshot()).toEqual({
       status: 'ready', opening: false, error: null,
+      editorOpen: false, path: null, content: '', saving: false, saveError: null, canOpen: true,
     })
     await controller.open()
     expect(openDocument).toHaveBeenCalledWith({})
@@ -47,7 +48,7 @@ describe('SettingsDocumentStore', () => {
     const openDocument = vi.fn(() => Promise.resolve(opened()))
     const absent = new SettingsDocumentStore({
       settings: { describe: () => Promise.resolve(response()), openDocument },
-    } as never)
+    } as never, () => false)
     await absent.load()
     await absent.open()
     expect(absent.store.getSnapshot().status).toBe('unavailable')
@@ -55,13 +56,13 @@ describe('SettingsDocumentStore', () => {
 
     const failed = new SettingsDocumentStore({
       settings: { describe: () => Promise.reject(new Error('offline')), openDocument },
-    } as never)
+    } as never, () => false)
     await failed.load()
     expect(failed.store.getSnapshot()).toMatchObject({ status: 'unavailable', error: 'offline' })
 
     const rejected = new SettingsDocumentStore({
       settings: { describe: () => Promise.resolve(describeFailed('provider failed')), openDocument },
-    } as never)
+    } as never, () => false)
     await rejected.load()
     expect(rejected.store.getSnapshot()).toMatchObject({
       status: 'unavailable', error: 'provider failed',
@@ -73,7 +74,7 @@ describe('SettingsDocumentStore', () => {
     const openDocument = vi.fn(() => new Promise<RpcResponse<{ opened: true }>>((resolve) => { resolveOpen = resolve }))
     const controller = new SettingsDocumentStore({
       settings: { describe: () => Promise.resolve(response(true)), openDocument },
-    } as never)
+    } as never, () => false)
     await controller.load()
     const first = controller.open()
     const second = controller.open()
@@ -100,7 +101,7 @@ describe('SettingsDocumentStore', () => {
         describe,
         openDocument: () => new Promise((_, reject) => { rejectOpen = reject }),
       },
-    } as never)
+    } as never, () => false)
     const stale = controller.load()
     await controller.load()
     resolveFirst(response())
@@ -122,11 +123,108 @@ describe('SettingsDocumentStore', () => {
           .mockResolvedValueOnce(response(true)),
         openDocument: vi.fn(),
       },
-    } as never)
+    } as never, () => false)
     const staleRejection = caught.load()
     await caught.load()
     rejectFirst(new Error('stale offline'))
     await staleRejection
     expect(caught.store.getSnapshot()).toMatchObject({ status: 'ready', error: null })
+  })
+})
+
+describe('SettingsDocumentStore editor', () => {
+  function ready(overrides: Record<string, unknown> = {}) {
+    const api = {
+      settings: {
+        describe: () => Promise.resolve(response(true)),
+        openDocument: vi.fn(),
+        documentRead: vi.fn(() => Promise.resolve({
+          rpcId: 'read' as never,
+          result: { ok: true as const, value: { path: '/home/test/settings.yaml', content: '# ready\n' } },
+        })),
+        documentWrite: vi.fn(() => Promise.resolve({
+          rpcId: 'write' as never,
+          result: { ok: true as const, value: { written: true as const } },
+        })),
+        ...overrides,
+      },
+    } as never
+    return { api, controller: new SettingsDocumentStore(api, () => true) }
+  }
+
+  it('opens the editor by reading the raw document and stages edits', async () => {
+    const { controller } = ready()
+    await controller.load()
+    await controller.openEditor()
+    const state = controller.store.getSnapshot()
+    expect(state.editorOpen).toBe(true)
+    expect(state.path).toBe('/home/test/settings.yaml')
+    expect(state.content).toBe('# ready\n')
+    controller.edit('# edited\n')
+    expect(controller.store.getSnapshot().content).toBe('# edited\n')
+  })
+
+  it('keeps the editor closed and reports when the read fails', async () => {
+    const { controller } = ready({
+      documentRead: () => Promise.resolve({
+        rpcId: 'read-failed' as never,
+        result: { ok: false as const, error: { code: 'internal' as const, message: 'read exploded', details: {} } },
+      }),
+    })
+    await controller.load()
+    await controller.openEditor()
+    const state = controller.store.getSnapshot()
+    expect(state.editorOpen).toBe(false)
+    expect(state.error).toBe('read exploded')
+  })
+
+  it('writes the staged text through the Host and closes on success', async () => {
+    const write = vi.fn(() => Promise.resolve({
+      rpcId: 'write' as never,
+      result: { ok: true as const, value: { written: true as const } },
+    }))
+    const { controller } = ready({ documentWrite: write })
+    await controller.load()
+    await controller.openEditor()
+    controller.edit('# save me\n')
+    await controller.saveEditor()
+    expect(write).toHaveBeenCalledWith({ content: '# save me\n' })
+    expect(controller.store.getSnapshot().editorOpen).toBe(false)
+  })
+
+  it('keeps the editor open with the diagnostic when the write is rejected', async () => {
+    const { controller } = ready({
+      documentWrite: () => Promise.resolve({
+        rpcId: 'write-failed' as never,
+        result: { ok: false as const, error: { code: 'internal' as const, message: 'invalid document', details: {} } },
+      }),
+    })
+    await controller.load()
+    await controller.openEditor()
+    await controller.saveEditor()
+    const state = controller.store.getSnapshot()
+    expect(state.editorOpen).toBe(true)
+    expect(state.saveError).toBe('invalid document')
+    expect(state.saving).toBe(false)
+  })
+
+  it('cancel discards the staged text and clears the save diagnostic', async () => {
+    const { controller } = ready()
+    await controller.load()
+    await controller.openEditor()
+    controller.edit('# staged\n')
+    controller.closeEditor()
+    const state = controller.store.getSnapshot()
+    expect(state.editorOpen).toBe(false)
+    expect(state.saveError).toBeNull()
+  })
+
+  it('no-ops open/save while the provider is unavailable', async () => {
+    const documentRead = vi.fn()
+    const { controller } = ready({ documentRead })
+    await controller.openEditor()
+    expect(documentRead).not.toHaveBeenCalled()
+    await controller.saveEditor()
+    expect(controller.store.getSnapshot().saving).toBe(false)
   })
 })

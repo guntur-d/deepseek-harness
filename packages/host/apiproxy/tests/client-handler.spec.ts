@@ -112,6 +112,8 @@ function scriptedApi(overrides: {
     settings: {
       describe: r => ok(r, { writable: true, hasDocument: false, namespaces: [] }),
       openDocument: r => ok(r, { opened: true as const }),
+      documentRead: r => ok(r, { path: '/stub/settings.yaml', content: '' }),
+      documentWrite: err,
       update: err,
       replace: err,
       mutate: err,
@@ -751,6 +753,8 @@ describe('config unary surface', () => {
       settings: {
         describe: record('settings.describe', r => ok(r, { writable: true, hasDocument: false, namespaces: [view] })),
         openDocument: record('settings.openDocument', r => ok(r, { opened: true as const })),
+        documentRead: record('settings.documentRead', r => ok(r, { path: '/stub/settings.yaml', content: '# stub\n' })),
+        documentWrite: record('settings.documentWrite', r => ok(r, { written: true as const })),
         update: record('settings.update', r => ok(r, view)),
         replace: record('settings.replace', r => ok(r, view)),
         mutate: record('settings.mutate', r => ok(r, view)),
@@ -771,6 +775,8 @@ describe('config unary surface', () => {
     const described = await c.settings.describe({})
     expect(described.result).toEqual({ ok: true, value: { writable: true, hasDocument: false, namespaces: [view] } })
     expect((await c.settings.openDocument({})).result).toEqual({ ok: true, value: { opened: true } })
+    expect((await c.settings.documentRead({})).result).toEqual({ ok: true, value: { path: '/stub/settings.yaml', content: '# stub\n' } })
+    expect((await c.settings.documentWrite({ content: '# new\n' })).result).toEqual({ ok: true, value: { written: true } })
     const updated = await c.settings.update({ ns: 'llm-deepseek', patch: { baseURL: 'https://next' } })
     expect(updated.result).toEqual({ ok: true, value: view })
     const replaced = await c.settings.replace({ ns: 'llm-deepseek', section: {} })
@@ -798,17 +804,18 @@ describe('config unary surface', () => {
     expect(discovered.result).toEqual({ ok: true, value: { models: [{ id: 'acme-large', contextWindow: 65536 }] } })
 
     expect(seen.map(call => call.method)).toEqual([
-      'settings.describe', 'settings.openDocument', 'settings.update', 'settings.replace', 'settings.mutate',
+      'settings.describe', 'settings.openDocument', 'settings.documentRead', 'settings.documentWrite',
+      'settings.update', 'settings.replace', 'settings.mutate',
       'credentials.describe', 'credentials.set', 'credentials.unset',
       'llm.providers', 'llm.models', 'llm.discoverModels',
     ])
-    expect(seen[2]?.payload).toEqual({ ns: 'llm-deepseek', patch: { baseURL: 'https://next' } })
-    expect(seen[4]?.payload)
+    expect(seen[4]?.payload).toEqual({ ns: 'llm-deepseek', patch: { baseURL: 'https://next' } })
+    expect(seen[6]?.payload)
       .toEqual({ ns: 'llm-deepseek', ops: [{ op: 'unset', path: ['baseURL'] }], expectedRevision: 0 })
-    expect(seen[6]?.payload).toEqual({ ref: 'OPENAI_API_KEY', value: 'sk-x' })
+    expect(seen[8]?.payload).toEqual({ ref: 'OPENAI_API_KEY', value: 'sk-x' })
     // The draft crosses whole, credential included: the host needs it for this
     // one interrogation and stores none of it.
-    expect(seen[10]?.payload).toEqual({
+    expect(seen[12]?.payload).toEqual({
       settingsNs: 'llm-pi-ai',
       baseURL: 'https://gateway.acme.example/v1',
       api: 'openai-completions',

@@ -66,6 +66,8 @@ export interface RpcMethodMap {
   'goal.clear': GoalsApi['clear']
   'settings.describe': SettingsApi['describe']
   'settings.openDocument': SettingsApi['openDocument']
+  'settings.documentRead': SettingsApi['documentRead']
+  'settings.documentWrite': SettingsApi['documentWrite']
   'settings.update': SettingsApi['update']
   'settings.replace': SettingsApi['replace']
   'settings.mutate': SettingsApi['mutate']

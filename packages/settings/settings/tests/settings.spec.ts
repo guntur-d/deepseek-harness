@@ -63,6 +63,8 @@ describe('provider metadata', () => {
     const { ctx } = await boot()
     expect(ctx.settings.documentPath).toBeUndefined()
     await expect(ctx.settings.prepareDocument()).resolves.toBeUndefined()
+    await expect(ctx.settings.readDocument()).resolves.toBeUndefined()
+    await expect(ctx.settings.writeDocument('# nope\n')).rejects.toThrow(/no local document to write/)
   })
 })
 

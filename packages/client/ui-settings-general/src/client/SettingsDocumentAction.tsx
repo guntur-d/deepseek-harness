@@ -6,6 +6,7 @@ import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-web-react'
 import type { SettingsDocumentState, SettingsDocumentStore } from './settings-document-store.ts'
+import { SettingsDocumentModal } from './SettingsDocumentModal.tsx'
 import css from './SettingsDocumentAction.module.css'
 
 /** Registrant-owned dependencies of {@link SettingsDocumentAction}. */
@@ -21,9 +22,11 @@ export type SettingsDocumentActionProps =
   PropsRuntime<'settings.action'> & PropsLocale<'settings'> & SettingsDocumentActionInjected
 
 /**
- * Render the open-document action only after Host metadata confirms document availability.
+ * Render the open-document action only after Host metadata confirms document
+ * availability. The gesture opens the in-browser document editor; the native
+ * open stays available inside the editor when the Host can reach a desktop.
  * @param props - header owner props, localized copy, and injected document state.
- * @returns the action, or null while unavailable or unresolved.
+ * @returns the action and its editor overlay, or null while unavailable or unresolved.
  */
 export function SettingsDocumentAction({ controller, useSnapshot, t }: SettingsDocumentActionProps): ReactNode {
   const state = useSnapshot(snapshot => snapshot)
@@ -35,16 +38,18 @@ export function SettingsDocumentAction({ controller, useSnapshot, t }: SettingsD
   if (state.status !== 'ready') return null
 
   return (
-    <div className={css.action}>
-      {state.error === null ? null : <span className={css.error} role="alert">{t('openDocument.error')}</span>}
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={state.opening}
-        onClick={() => { void controller.open() }}
-      >
-        {t('openDocument')}
-      </Button>
-    </div>
+    <>
+      <div className={css.action}>
+        {state.error === null ? null : <span className={css.error} role="alert">{t('openDocument.error')}</span>}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => { void controller.openEditor() }}
+        >
+          {t('openDocument')}
+        </Button>
+      </div>
+      <SettingsDocumentModal controller={controller} useSnapshot={useSnapshot} t={t} />
+    </>
   )
 }

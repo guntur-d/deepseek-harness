@@ -57,7 +57,8 @@ import {
   goalClearRequestSchema,
 } from '../api/goals.schema.ts'
 import {
-  settingsDescribeRequestSchema, settingsMutateRequestSchema, settingsOpenDocumentRequestSchema,
+  settingsDescribeRequestSchema, settingsDocumentReadRequestSchema, settingsDocumentWriteRequestSchema,
+  settingsMutateRequestSchema, settingsOpenDocumentRequestSchema,
   settingsReplaceRequestSchema, settingsUpdateRequestSchema,
 } from '../api/settings.schema.ts'
 import {
@@ -137,6 +138,8 @@ const UNARY_ROUTES: UnaryRoutes = {
   'goal.clear': { schema: goalClearRequestSchema, invoke: (api, r) => api.goals.clear(r) },
   'settings.describe': { schema: settingsDescribeRequestSchema, invoke: (api, r) => api.settings.describe(r) },
   'settings.openDocument': { schema: settingsOpenDocumentRequestSchema, invoke: (api, r, signal) => api.settings.openDocument(r, signal) },
+  'settings.documentRead': { schema: settingsDocumentReadRequestSchema, invoke: (api, r) => api.settings.documentRead(r) },
+  'settings.documentWrite': { schema: settingsDocumentWriteRequestSchema, invoke: (api, r) => api.settings.documentWrite(r) },
   'settings.update': { schema: settingsUpdateRequestSchema, invoke: (api, r) => api.settings.update(r) },
   'settings.replace': { schema: settingsReplaceRequestSchema, invoke: (api, r) => api.settings.replace(r) },
   'settings.mutate': { schema: settingsMutateRequestSchema, invoke: (api, r) => api.settings.mutate(r) },

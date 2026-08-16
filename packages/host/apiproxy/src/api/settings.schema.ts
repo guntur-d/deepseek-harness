@@ -44,6 +44,25 @@ export const settingsOpenDocumentValueSchema = z.object({
   opened: z.literal(true),
 }) satisfies z.ZodType<Wire<ResponseValue<'settings.openDocument'>>>
 
+/** settings.documentRead request payload (empty object literal). */
+export const settingsDocumentReadRequestSchema = z.object({}) satisfies z.ZodType<Wire<RequestPayload<'settings.documentRead'>>>
+
+/** settings.documentRead response value. */
+export const settingsDocumentReadValueSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+}) satisfies z.ZodType<Wire<ResponseValue<'settings.documentRead'>>>
+
+/** settings.documentWrite request payload: the full replacement document. */
+export const settingsDocumentWriteRequestSchema = z.object({
+  content: z.string(),
+}) satisfies z.ZodType<Wire<RequestPayload<'settings.documentWrite'>>>
+
+/** settings.documentWrite response value. */
+export const settingsDocumentWriteValueSchema = z.object({
+  written: z.literal(true),
+}) satisfies z.ZodType<Wire<ResponseValue<'settings.documentWrite'>>>
+
 /** settings.update request payload. */
 export const settingsUpdateRequestSchema = z.object({
   ns: z.string().min(1),

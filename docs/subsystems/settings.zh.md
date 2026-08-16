@@ -185,6 +185,22 @@ Abstract settings service. Providers implement raw-document storage (`load`/`per
 prepareDocument(): Promise<string | undefined>
 
 /**
+ * Read the provider's raw user-editable document text — the exact bytes a
+ * native or browser editor would show. Non-file providers have no document
+ * and return undefined.
+ * @returns the raw document text, or undefined when the provider has none.
+ */
+readDocument(): Promise<string | undefined>
+
+/**
+ * Replace the provider's raw user-editable document text. File providers
+ * validate the replacement before persisting it; non-file providers refuse.
+ * @param _content - the full replacement document text (unused in the non-file default).
+ * @throws when the provider has no document or the content does not parse.
+ */
+writeDocument(_content: string): Promise<void>
+
+/**
  * Register a namespace schema and receive its owner scope. The registration
  * is an effect on the calling plugin's fiber: disposing that fiber removes
  * the namespace and its observers. An invalid stored section fails the

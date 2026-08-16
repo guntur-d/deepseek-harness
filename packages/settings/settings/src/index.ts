@@ -410,6 +410,26 @@ export abstract class SettingsProvider extends Service {
   }
 
   /**
+   * Read the provider's raw user-editable document text — the exact bytes a
+   * native or browser editor would show. Non-file providers have no document
+   * and return undefined.
+   * @returns the raw document text, or undefined when the provider has none.
+   */
+  readDocument(): Promise<string | undefined> {
+    return Promise.resolve(undefined)
+  }
+
+  /**
+   * Replace the provider's raw user-editable document text. File providers
+   * validate the replacement before persisting it; non-file providers refuse.
+   * @param _content - the full replacement document text (unused in the non-file default).
+   * @throws when the provider has no document or the content does not parse.
+   */
+  writeDocument(_content: string): Promise<void> {
+    throw new Error('settings provider has no local document to write')
+  }
+
+  /**
    * Read the provider's current raw document (namespace to raw section).
    * @returns the detached raw document.
    */

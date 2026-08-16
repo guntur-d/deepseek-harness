@@ -3402,6 +3402,58 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
         return openTextFile(request, path, signal)
       },
+      async documentRead(request) {
+        const settings = ctx.get('settings')
+        if (settings === undefined) return err(request, settingsAbsent())
+        let path: string | undefined
+        try {
+          path = await settings.prepareDocument()
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'internal',
+            message: `settings document preparation failed: ${error instanceof Error ? error.message : String(error)}`,
+            details: {},
+          })
+        }
+        if (path === undefined) {
+          return err(request, {
+            code: 'internal',
+            message: 'settings provider has no local document to read',
+            details: {},
+          })
+        }
+        try {
+          const content = await settings.readDocument()
+          return ok(request, { path, content: content ?? '' })
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'internal',
+            message: `settings document read failed: ${error instanceof Error ? error.message : String(error)}`,
+            details: {},
+          })
+        }
+      },
+      async documentWrite(request) {
+        const settings = ctx.get('settings')
+        if (settings === undefined) return err(request, settingsAbsent())
+        if (settings.documentPath === undefined) {
+          return err(request, {
+            code: 'internal',
+            message: 'settings provider has no local document to write',
+            details: {},
+          })
+        }
+        try {
+          await settings.writeDocument(request.payload.content)
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'internal',
+            message: `settings document write rejected: ${error instanceof Error ? error.message : String(error)}`,
+            details: {},
+          })
+        }
+        return ok(request, { written: true })
+      },
       update: request => settingsWrite(request, request.payload.ns, 'update', request.payload.patch, request.payload.expectedRevision),
       replace: request => settingsWrite(request, request.payload.ns, 'replace', request.payload.section, request.payload.expectedRevision),
       mutate: request => settingsWrite(request, request.payload.ns, 'mutate', request.payload.ops, request.payload.expectedRevision),
