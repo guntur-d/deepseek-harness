@@ -1,5 +1,7 @@
 # DeepSeek Harness — guntur-d distribution
 
+> Everything built in this fork, with the full chronology, is logged in [CHANGELOG.md](CHANGELOG.md).
+
 A maintained fork of [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) with additional features for the **remote-server use case** (harness on a server, operator on the browser). Upstream does not accept external feature PRs, so these live here as a source distribution.
 
 ## Delta vs upstream
