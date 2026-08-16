@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createProcessShutdown,
   PROCESS_SHUTDOWN_TIMEOUT_MS,
+  WIN32_SIGINT_GRACE_MS,
 } from '../src/process-shutdown.ts'
 
 function deferred(): { promise: Promise<void>; resolve: () => void; reject: (error: Error) => void } {
@@ -92,6 +93,25 @@ describe('process shutdown', () => {
 
     disposal.resolve()
     await pending
+  })
+
+  it('keeps the win32 SIGINT grace far below the default shutdown window', () => {
+    expect(WIN32_SIGINT_GRACE_MS).toBeLessThan(1_000)
+    expect(WIN32_SIGINT_GRACE_MS).toBeLessThan(PROCESS_SHUTDOWN_TIMEOUT_MS)
+  })
+
+  it('honors a per-interrupt grace shorter than the default', async () => {
+    const disposal = deferred()
+    const exit = vi.fn()
+    const shutdown = createProcessShutdown(() => disposal.promise, exit, vi.fn())
+
+    shutdown.interrupt(130, 10)
+    await new Promise(resolve => setTimeout(resolve, 40))
+    expect(exit).toHaveBeenCalledOnce()
+    expect(exit).toHaveBeenCalledWith(130)
+
+    disposal.resolve()
+    await shutdown.shutdown(0)
   })
 
   it('lets Ctrl+C force a normal shutdown already stuck in disposal', async () => {
