@@ -287,6 +287,13 @@ interface TokenUsage {
  */
 declare class BlockAssembler {
   /**
+   * @param options - assembly options.
+   * @param options.streamSalt - per-message discriminator for fallback tool-call
+   * ids, so calls a provider streams without an id stay unique across the
+   * conversation history (the agent loop passes `turn-step`).
+   */
+  constructor(options: { streamSalt?: string } = {});
+  /**
    * Feed one chunk into the assembly state.
    * @param chunk - the next raw chunk, in stream order.
    */
