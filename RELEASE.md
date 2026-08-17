@@ -12,7 +12,11 @@ A maintained fork of [deepseek-ai/deepseek-harness](https://github.com/deepseek-
 | Tool-call id fix: degenerate streams no longer fail the turn with `INVALID_REQUEST: Duplicate value for 'tool_call_id'` | PR #2 (`fix/tool-call-id-uniqueness`) | [Agent Note](.agents/notes/implemented/bug-fix/2026-08-14-tool-call-id-collision.md) |
 | Loop cap: `maxConsecutiveToolFailures` ends the failing-tool retry loop | PR #3 (`fix/tool-failure-loop-cap`) | [Agent Note](.agents/notes/implemented/bug-fix/2026-08-14-consecutive-tool-failure-loop-cap.md) |
 | Persistent cross-session memory: `ctx.memory` + `memory_*` tools + `app:memory` prompt injection | PR #4 (`feat/persistent-memory`) | [Agent Note](.agents/notes/implemented/feature/2026-08-14-persistent-cross-session-memory.md), also standalone: [guntur-d/dsh-memory](https://github.com/guntur-d/dsh-memory) |
-| Files panel (in development): workspace-scoped right-panel file browser/viewer/editor with upload/download | next | [handoff](handoff-dsh-fork-work.md) |
+| Optional `run_code` description: a missing description falls back to a title instead of failing the call | PR #5 | [CHANGELOG](CHANGELOG.md) |
+| Workspace Files panel: `Files` tab with list/read/bounded edit/upload/download over HTTP, workspace-scoped under the session cwd | PR #6 (`feat/files-panel`) | [Agent Note](.agents/notes/implemented/feature/2026-08-15-workspace-files-panel.md) |
+| Files before the first message; settings trust for privileged remotes; in-browser configuration editor (`settings.documentRead`/`documentWrite`); recursive `@` workspace file mentions; 2 GiB transfer bound (`filesMaxTransferBytes`) | session 3 | [Agent Note](.agents/notes/implemented/feature/2026-08-16-settings-document-editor.md), [CHANGELOG](CHANGELOG.md) |
+| Copy path on plain HTTP: `navigator.clipboard` is undefined on insecure origins, so the row action routes through the shared `writeClipboard` fallback | session 3 | [CHANGELOG](CHANGELOG.md) |
+| Upstream bug fixes: win32 sandbox no longer grants `<drive>:\tmp` (POSIX `/tmp` literal); win32 SIGINT exits in ~300 ms so PowerShell keeps its console | PR #7 / PR #8 | [Note](.agents/notes/implemented/bug-fix/2026-08-16-workspace-write-tmp-root-windows.md), [Note](.agents/notes/implemented/bug-fix/2026-08-16-win32-sigint-console.md) |
 
 ## Run
 
@@ -51,4 +55,4 @@ git merge --ff-only origin/master        # keep master current
 
 ## Relationship to upstream
 
-Upstream's CONTRIBUTING.md does not accept external PRs; bug reports flow through GitHub Discussions (the tool-call, loop, and npm-publish issues are reported there with fix references). This fork is the maintained home of the feature deltas. Plugin-ecosystem extras (installable via `dsh plugin add`): [dsh-memory](https://github.com/guntur-d/dsh-memory).
+Upstream's CONTRIBUTING.md does not accept external PRs; bug reports flow through GitHub Discussions with fix references (tool-call ids #161, npm packaging #984, run_code description #1093, loop hang #1419, sandbox `/tmp` #2562, win32 SIGINT #2568 — each posted EN + 中文). This fork is the maintained home of the feature deltas. Plugin-ecosystem extras (installable via `dsh plugin add`): [dsh-memory](https://github.com/guntur-d/dsh-memory).
