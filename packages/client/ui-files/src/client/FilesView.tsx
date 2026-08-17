@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FileContent, FilesEntry, FilesListing } from '@deepseek-ai/dsh-client-connection/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FilesViewInjected } from './contract.ts'
 import css from './FilesView.module.css'
 
@@ -144,6 +145,9 @@ export function FilesView({
     }
   }
 
+  /** Copy a path to the clipboard; false when the host refused the write. */
+  const copyPath = (text: string): Promise<boolean> => writeClipboard(text)
+
   const editable = open !== null && !open.content.truncated
 
   return (
@@ -246,14 +250,10 @@ export function FilesView({
                     className={css.button}
                     onClick={(event) => {
                       event.stopPropagation()
-                      void navigator.clipboard.writeText(joinPath(directory, entry.name)).then(
-                        () => { setNotice({ kind: 'info', text: t('panel.copied') }) },
-                        (error: unknown) => {
-                          setNotice({
-                            kind: 'error',
-                            /* v8 ignore next -- the clipboard rejects with an Error in tests; the arm guards a non-Error rejection. */
-                            text: error instanceof Error ? error.message : String(error),
-                          })
+                      void copyPath(joinPath(directory, entry.name)).then(
+                        (accepted) => {
+                          if (accepted) setNotice({ kind: 'info', text: t('panel.copied') })
+                          else setNotice({ kind: 'error', text: t('panel.copyFailed') })
                         },
                       )
                     }}

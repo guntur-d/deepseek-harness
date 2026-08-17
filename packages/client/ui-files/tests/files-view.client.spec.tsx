@@ -243,7 +243,40 @@ describe('FilesView editor', () => {
     await screen.findByText(zh['panel.copied'])
   })
 
-  it('reports an Error clipboard failure as an error notice', async () => {
+  it('falls back to execCommand when the clipboard API is unavailable', async () => {
+    const f = face({
+      list: vi.fn(async () => listing([entry('a.txt', 'file', 11)])),
+    })
+    const originalClipboard = navigator.clipboard
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+    const exec = vi.fn(() => true)
+    Object.defineProperty(document, 'execCommand', { value: exec, configurable: true })
+    render(<FilesView {...f} t={t} />)
+    await screen.findByText('a.txt')
+    await act(async () => { fireEvent.click(screen.getByText(zh['panel.copyPath'])) })
+    expect(exec).toHaveBeenCalledWith('copy')
+    await screen.findByText(zh['panel.copied'])
+    delete (document as { execCommand?: unknown }).execCommand
+    Object.defineProperty(navigator, 'clipboard', { value: originalClipboard, configurable: true })
+  })
+
+  it('reports a refused execCommand copy as the localized notice', async () => {
+    const f = face({
+      list: vi.fn(async () => listing([entry('a.txt', 'file', 11)])),
+    })
+    const originalClipboard = navigator.clipboard
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+    const exec = vi.fn(() => false)
+    Object.defineProperty(document, 'execCommand', { value: exec, configurable: true })
+    render(<FilesView {...f} t={t} />)
+    await screen.findByText('a.txt')
+    await act(async () => { fireEvent.click(screen.getByText(zh['panel.copyPath'])) })
+    await screen.findByText(zh['panel.copyFailed'])
+    delete (document as { execCommand?: unknown }).execCommand
+    Object.defineProperty(navigator, 'clipboard', { value: originalClipboard, configurable: true })
+  })
+
+  it('reports a rejected clipboard write as the localized notice', async () => {
     const f = face({
       list: vi.fn(async () => listing([entry('a.txt', 'file', 11)])),
     })
@@ -251,18 +284,8 @@ describe('FilesView editor', () => {
     render(<FilesView {...f} t={t} />)
     await screen.findByText('a.txt')
     await act(async () => { fireEvent.click(screen.getByText(zh['panel.copyPath'])) })
-    await screen.findByText('denied')
-  })
-
-  it('reports a clipboard failure as an error notice', async () => {
-    const f = face({
-      list: vi.fn(async () => listing([entry('a.txt', 'file', 11)])),
-    })
-    Object.assign(navigator, { clipboard: { writeText: () => Promise.reject(new Error('clipboard blocked')) } })
-    render(<FilesView {...f} t={t} />)
-    await screen.findByText('a.txt')
-    await act(async () => { fireEvent.click(screen.getByText(zh['panel.copyPath'])) })
-    await screen.findByText('clipboard blocked')
+    await screen.findByText(zh['panel.copyFailed'])
+    expect(screen.queryByText('denied')).toBeNull()
   })
 
   it('shows the read error as a notice', async () => {

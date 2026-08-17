@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-16-win32-sigint-console.md
-2026-08-16-win32-sigint-console.md: 50db09ed75c18e6324e8e56ce29d0d26e2be8c83
-2026-08-16-win32-sigint-console.zh.md: 44efa5db28ce9a63189b503956836971a2b5e935
+2026-08-16-win32-sigint-console.md: cd36dc00553449abba5602969443d11399e90cd8
+2026-08-16-win32-sigint-console.zh.md: f15a7e9775683cf0661ce9ec73661ac413ddb414
