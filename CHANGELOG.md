@@ -5,7 +5,7 @@ Everything built on top of upstream `deepseek-ai/deepseek-harness` in the
 [RELEASE.md](RELEASE.md); the day-to-day handoff is
 `handoff-dsh-fork-work.md` (repo root, untracked).
 
-## Current capabilities (fork master @ `be2633d15f`)
+## Current capabilities (fork master @ `2e9154ce0b`)
 
 - **Remote web GUI** (`PR #1`): `dsh web` serves the full browser UI on a
   remote host. `--host`, `--trusted-host` (repeatable), and
@@ -41,6 +41,15 @@ Everything built on top of upstream `deepseek-ai/deepseek-harness` in the
   inserts the workspace-relative path for the model's file tools.
 - **2 GiB transfer bound** (deployment lever): `filesMaxTransferBytes`
   in the profile patch (default remains 64 MiB).
+- **Upstream fix #7** (win32 sandbox): `workspace-write` never grants
+  `<drive>:\tmp` on Windows (the POSIX `/tmp` literal was resolved against
+  the current drive); **#8** (win32 SIGINT): Ctrl+C exits in ~300ms so
+  PowerShell keeps its console.
+- **Copy path on plain HTTP**: the Files panel row action routes through
+  the shared `writeClipboard` (async Clipboard API with an `execCommand`
+  fallback) and reports the boolean result as the copied/copy-failed
+  notice — `navigator.clipboard` is undefined on insecure origins, which
+  previously threw.
 
 ## Chronology
 
@@ -69,6 +78,12 @@ Everything built on top of upstream `deepseek-ai/deepseek-harness` in the
   with a real model round. The model routes use the pateway gateway
   (`api.pateway.ai/v1`) for both `llm-deepseek` and the pi-ai
   `opencode-go` provider.
+- **2026-08-16** — Upstream bug fixes merged: PR #7 (sandbox `/tmp` on
+  Windows, Discussion #2562) and PR #8 (win32 SIGINT grace, Discussion
+  #2568), each reported EN + 中文 on the upstream Discussions.
+- **2026-08-16** — Clipboard fix: Copy path works on plain HTTP; the
+  component tests now pin both the refused-`execCommand` and
+  rejected-Clipboard-API cases to the localized failure notice.
 
 ## Operational notes
 
